@@ -1,0 +1,27 @@
+# Local .terraform directories containing downloaded providers and modules
+**/.terraform/*
+
+# .tfstate files (only if local files are left behind, protects history)
+**/*.tfstate
+**/*.tfstate.*
+
+# Exclude ALL .tfvars and .tfvars.json files (essential: prevents database secrets and credentials from leaking)
+**/*.tfvars
+**/*.tfvars.json
+
+# Ignore override files
+**/*_override.tf
+**/*_override.tf.json
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+
+# Ignore log files
+crash.log
+crash.*.log
+*.log
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db
