@@ -7,10 +7,10 @@ terraform {
       }
     }
     backend "s3" {
-        bucket       = "altrx-terraform-state-993197" 
-        key          = "altrx/staging/terraform.tfstate"
+        bucket       = "altrx-terraform-state-236707" # Copied from bootstrap output!
+        key          = "altrx/preprod/terraform.tfstate"
         region       = "ap-south-1"
-        profile      = "altrx" 
+        profile      = "altrx"
         use_lockfile = true
         encrypt      = true
     }
@@ -21,3 +21,4 @@ provider "aws" {
     profile = var.aws_profile 
 }
 
+# --- Paste your import blocks or modules here ---
