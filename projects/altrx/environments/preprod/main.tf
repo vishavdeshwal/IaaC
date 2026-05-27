@@ -7,9 +7,9 @@ terraform {
       }
     }
     backend "s3" {
-        bucket       = "altrx-terraform-state-236707" # Copied from bootstrap output!
+        bucket       = "altrx-terraform-state-993197"
         key          = "altrx/preprod/terraform.tfstate"
-        region       = "ap-south-1"
+        region       = "us-east-1"
         profile      = "altrx"
         use_lockfile = true
         encrypt      = true

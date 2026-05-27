@@ -20,5 +20,40 @@ variable "project" {
 
 variable "vpc_cidr" {
     type    = string
-    default = "10.1.0.0/16" # Different subnet range than SAM to avoid conflicts
+    default = "10.1.0.0/16"
+}
+
+variable "instance_tenancy" {
+    type    = string
+    default = "default"
+}
+
+variable "enable_dns_hostnames" {
+    type    = bool
+    default = true
+}
+
+variable "enable_dns_support" {
+    type    = bool
+    default = true
+}
+
+variable "public_subnets" {
+    type = map(object({
+        cidr     = string
+        az_index = number
+    }))
+}
+
+variable "private_subnets" {
+    type = map(object({
+        cidr     = string
+        az_index = number
+    }))
+}
+
+variable "reconciler_env_vars" {
+  type        = map(string)
+  description = "Environment variables for the altrx-reconciler-staging Lambda function"
+  sensitive   = true
 }
