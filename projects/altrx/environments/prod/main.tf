@@ -1210,7 +1210,7 @@ resource "aws_lambda_function" "altrx_reconciler" {
   tags_all                           = {}
   timeout                            = 600
   environment {
-    variables = local.reconciler_env_vars
+    variables = var.reconciler_env_vars
   }
   ephemeral_storage {
     size = 512

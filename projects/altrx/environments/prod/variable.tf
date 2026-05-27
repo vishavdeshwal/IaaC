@@ -52,44 +52,8 @@ variable "private_subnets" {
     }))
 }
 
-variable "meta_access_token" {
-    type      = string
-    sensitive = true
+variable "reconciler_env_vars" {
+  type        = map(string)
+  description = "Environment variables for the altrx-reconciler Lambda function"
+  sensitive   = true
 }
-
-variable "slack_webhook_url" {
-    type      = string
-    sensitive = true
-}
-
-variable "stripe_tellescope_secret_key" {
-    type      = string
-    sensitive = true
-}
-
-variable "stripe_tellescope_webhook_secret" {
-    type      = string
-    sensitive = true
-}
-
-variable "stripe_whitecoat_secret_key" {
-    type      = string
-    sensitive = true
-}
-
-variable "stripe_whitecoat_webhook_secret" {
-    type      = string
-    sensitive = true
-}
-
-variable "tellescope_tellescope_api_key" {
-    type      = string
-    sensitive = true
-}
-
-variable "tellescope_whitecoat_api_key" {
-    type      = string
-    sensitive = true
-}
-
-
