@@ -48,3 +48,9 @@ variable "project" {
     type        = string
     description = "Project name"
 }
+
+variable "name_override" {
+    type    = string
+    default = null
+}
+

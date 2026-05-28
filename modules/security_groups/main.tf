@@ -1,6 +1,6 @@
 resource "aws_security_group" "security_group" {
-    name = "${var.environment}-${var.project}-${var.name}-sg"
-    description = "Security group for ${var.name}"
+    name = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}-sg"
+    description = var.description != null ? var.description : "Security group for ${var.name}"
     vpc_id = var.vpc_id
 
 
@@ -36,6 +36,6 @@ resource "aws_security_group" "security_group" {
     }
 
     tags = {
-        Name = "${var.environment}-${var.project}-${var.name}-sg"
+        Name = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}-sg"
     }
 }

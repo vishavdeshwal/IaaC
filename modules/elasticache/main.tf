@@ -3,7 +3,7 @@
 # -------
 
 resource "aws_elasticache_subnet_group" "elasticache" {
-    name        = lower("${var.environment}-${var.project}-${var.name}-subnet-group")
+    name        = var.subnet_group_name_override != null ? var.subnet_group_name_override : lower("${var.environment}-${var.project}-${var.name}-subnet-group")
     subnet_ids  = var.subnet_ids
     description = "ElastiCache subnet group for ${var.name}"
 
@@ -23,7 +23,7 @@ resource "aws_elasticache_subnet_group" "elasticache" {
 resource "aws_elasticache_replication_group" "redis" {
     count = var.engine == "redis" ? 1 : 0
 
-    replication_group_id = "${var.environment}-${var.project}-${var.name}"
+    replication_group_id = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}"
     description          = "${var.environment}-${var.project} Redis cache"
 
     engine               = "redis"
@@ -63,7 +63,7 @@ resource "aws_elasticache_replication_group" "redis" {
 resource "aws_elasticache_cluster" "memcached" {
     count = var.engine == "memcached" ? 1 : 0
 
-    cluster_id           = "${var.environment}-${var.project}-${var.name}"
+    cluster_id           = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}"
     engine               = "memcached"
     engine_version       = var.engine_version
     node_type            = var.node_type

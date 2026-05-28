@@ -85,434 +85,327 @@ module "route_table_association" {
 
 # Isolated Security Groups for Staging
 # =============================================================
-resource "aws_security_group" "staging_redis" {
+module "staging_redis_sg" {
+  source      = "../../../../modules/security_groups"
+  name        = "redis"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+  name_override = "Staging-Redis-Sg"
   description = "Allows Redis traffic"
-  egress = [{
-    cidr_blocks      = []
-    description      = ""
-    from_port        = 6379
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = [aws_security_group.staging_be.id]
-    self             = false
-    to_port          = 6379
+
+  ingress_rules = [{
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    cidr_blocks     = []
+    security_groups = [module.staging_be_sg.security_group_id]
+    description     = "Allows Redis traffic"
   }]
-  ingress = [{
-    cidr_blocks      = []
-    description      = ""
-    from_port        = 6379
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = [aws_security_group.staging_be.id]
-    self             = false
-    to_port          = 6379
+
+  egress_rules = [{
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    cidr_blocks     = []
+    security_groups = [module.staging_be_sg.security_group_id]
+    description     = "Allows Redis traffic"
   }]
-  name                   = "Staging-Redis-Sg"
-  revoke_rules_on_delete = null
-  tags                   = { Environment = var.environment }
-  tags_all               = { Environment = var.environment }
-  vpc_id                 = module.vpc.vpc_id
 }
 
-resource "aws_security_group" "staging_alb" {
+module "staging_alb_sg" {
+  source      = "../../../../modules/security_groups"
+  name        = "alb"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+  name_override = "Staging-ALB-SG"
   description = "It allows internet traffic"
-  egress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 0
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "-1"
-    security_groups  = []
-    self             = false
-    to_port          = 0
-  }]
-  ingress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 443
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = []
-    self             = false
-    to_port          = 443
+
+  ingress_rules = [{
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = "It allows internet traffic"
     }, {
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 80
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = []
-    self             = false
-    to_port          = 80
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = "It allows internet traffic"
   }]
-  name                   = "Staging-ALB-SG"
-  revoke_rules_on_delete = null
-  tags                   = { Environment = var.environment }
-  tags_all               = { Environment = var.environment }
-  vpc_id                 = module.vpc.vpc_id
+
+  egress_rules = [{
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = "Allows all outbound traffic"
+  }]
 }
 
-resource "aws_security_group" "staging_be" {
-  name                   = "Staging-BE-SG"
-  revoke_rules_on_delete = null
-  tags                   = { Environment = var.environment }
-  tags_all               = { Environment = var.environment }
-  vpc_id                 = module.vpc.vpc_id
+module "staging_be_sg" {
+  source      = "../../../../modules/security_groups"
+  name        = "be"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+  name_override = "Staging-BE-SG"
   description = "Allow ALB Traffic"
-  egress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 0
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "-1"
-    security_groups  = []
-    self             = false
-    to_port          = 0
+
+  ingress_rules = [{
+    from_port       = 8000
+    to_port         = 8000
+    protocol        = "tcp"
+    cidr_blocks     = []
+    security_groups = [module.staging_alb_sg.security_group_id]
+    description     = "Allow ALB Traffic"
   }]
-  ingress = [{
-    cidr_blocks      = []
-    description      = ""
-    from_port        = 8000
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = [aws_security_group.staging_alb.id]
-    self             = false
-    to_port          = 8000
+
+  egress_rules = [{
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = "Allows all outbound traffic"
   }]
 }
 
-resource "aws_security_group" "staging_worker" {
+module "staging_worker_sg" {
+  source      = "../../../../modules/security_groups"
+  name        = "worker"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+  name_override = "Staging-Worker-SG"
   description = "Allow Outbound and Inbound specific"
-  egress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 0
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "-1"
-    security_groups  = []
-    self             = false
-    to_port          = 0
+
+  ingress_rules = []
+
+  egress_rules = [{
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = "Allow Outbound and Inbound specific"
   }]
-  ingress                = []
-  name                   = "Staging-Worker-SG"
-  revoke_rules_on_delete = null
-  tags                   = { Environment = var.environment }
-  tags_all               = { Environment = var.environment }
-  vpc_id                 = module.vpc.vpc_id
 }
 
-resource "aws_security_group" "staging_wordpress" {
+module "staging_wordpress_sg" {
+  source      = "../../../../modules/security_groups"
+  name        = "wordpress"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+  name_override = "staging-wordpress-sg"
   description = "launch-wizard-1 created 2026-04-20T18:09:51.774Z"
-  egress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 0
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "-1"
-    security_groups  = []
-    self             = false
-    to_port          = 0
-  }]
-  ingress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 22
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = []
-    self             = false
-    to_port          = 22
+
+  ingress_rules = [{
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = "Allow SSH"
     }, {
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 443
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = []
-    self             = false
-    to_port          = 443
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = "Allow HTTPS"
     }, {
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 80
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = []
-    self             = false
-    to_port          = 80
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = "Allow HTTP"
   }]
-  name                   = "staging-wordpress-sg"
-  revoke_rules_on_delete = null
-  tags                   = { Environment = var.environment }
-  tags_all               = { Environment = var.environment }
-  vpc_id                 = module.vpc.vpc_id
+
+  egress_rules = [{
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = "Allows all outbound traffic"
+  }]
 }
+
 
 # =============================================================
 # Consolidated Databases (DynamoDB & Redis)
 # =============================================================
-resource "aws_elasticache_subnet_group" "staging_redis" {
-  description = "Subnet group for staging redis cluster"
-  name        = "staging-sg"
-  subnet_ids  = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
+module "staging_redis" {
+  source                     = "../../../../modules/elasticache"
+  name                       = "redis"
+  engine                     = "redis"
+  node_type                  = "cache.t3.small"
+  num_cache_clusters         = 1
+  transit_encryption         = true
+  at_rest_encryption         = true
+  auth_token                 = null
+  maintenance_window         = "thu:04:00-thu:05:00"
+  snapshot_retention_limit   = 1
+  snapshot_window            = "06:30-07:30"
+  subnet_ids                 = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
+  security_group_ids         = [module.staging_redis_sg.security_group_id]
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "staging-redis"
+  subnet_group_name_override = "staging-sg"
+  apply_immediately          = true
 }
 
-resource "aws_dynamodb_table" "payment_events_log" {
-  billing_mode                = "PAY_PER_REQUEST"
-  deletion_protection_enabled = false
-  hash_key                    = "event_id"
-  name                        = "staging_altrx-payment-events-log"
-  range_key                   = "received_at"
-  read_capacity               = 0
-  stream_enabled              = false
-  table_class                 = "STANDARD"
-  tags                        = { Environment = var.environment }
-  write_capacity              = 0
-  attribute {
-    name = "event_id"
-    type = "S"
-  }
-  attribute {
-    name = "received_at"
-    type = "S"
-  }
+module "dynamodb_payment_events_log" {
+  source       = "../../../../modules/dynamodb"
+  name         = "staging_altrx-payment-events-log"
+  hash_key     = "event_id"
+  range_key    = "received_at"
+  billing_mode = "PAY_PER_REQUEST"
+  environment  = var.environment
+  project      = var.project
+  attributes = [
+    { name = "event_id", type = "S" },
+    { name = "received_at", type = "S" }
+  ]
 }
 
-resource "aws_elasticache_replication_group" "staging_redis" {
-  at_rest_encryption_enabled  = true
-  auth_token                  = null
-  auto_minor_version_upgrade  = true
-  automatic_failover_enabled  = false
-  cluster_mode                = "disabled"
-  data_tiering_enabled        = false
-  description                 = "Staging Redis Cache"
-  engine                      = "redis"
-  engine_version              = "7.1"
-  ip_discovery                = "ipv4"
-  maintenance_window          = "thu:04:00-thu:05:00"
-  multi_az_enabled            = false
-  network_type                = "ipv4"
-  node_type                   = "cache.t3.small"
-  num_cache_clusters          = 1  # Standard cluster size for staging
-  parameter_group_name        = "default.redis7"
-  port                        = 6379
-  replication_group_id        = "staging-redis"
-  security_group_ids          = [aws_security_group.staging_redis.id]
-  snapshot_retention_limit    = 1
-  snapshot_window             = "06:30-07:30"
-  subnet_group_name           = aws_elasticache_subnet_group.staging_redis.name
-  tags                        = { Environment = var.environment }
-  transit_encryption_enabled  = true
-  transit_encryption_mode     = "required"
-  log_delivery_configuration {
-    destination      = "redis-prod" # Staging uses same logging bucket/group or dedicated log group
-    destination_type = "cloudwatch-logs"
-    log_format       = "json"
-    log_type         = "slow-log"
-  }
+module "dynamodb_processed_events" {
+  source       = "../../../../modules/dynamodb"
+  name         = "staging_altrx-processed-events"
+  hash_key     = "event_id"
+  billing_mode = "PAY_PER_REQUEST"
+  environment  = var.environment
+  project      = var.project
+  attributes = [
+    { name = "event_id", type = "S" }
+  ]
 }
 
-resource "aws_dynamodb_table" "processed_events" {
-  billing_mode                = "PAY_PER_REQUEST"
-  deletion_protection_enabled = false
-  hash_key                    = "event_id"
-  name                        = "staging_altrx-processed-events"
-  range_key                   = null
-  read_capacity               = 0
-  stream_enabled              = false
-  table_class                 = "STANDARD"
-  tags                        = { Environment = var.environment }
-  write_capacity              = 0
-  attribute {
-    name = "event_id"
-    type = "S"
-  }
+module "dynamodb_stripe_customers" {
+  source       = "../../../../modules/dynamodb"
+  name         = "staging_altrx-stripe-customers"
+  hash_key     = "stripe_customer_id"
+  billing_mode = "PAY_PER_REQUEST"
+  environment  = var.environment
+  project      = var.project
+  attributes = [
+    { name = "account", type = "S" },
+    { name = "email", type = "S" },
+    { name = "stripe_customer_id", type = "S" }
+  ]
+  global_secondary_indexes = [
+    {
+      name            = "email-account-index"
+      hash_key        = "email"
+      range_key       = "account"
+      projection_type = "ALL"
+    }
+  ]
 }
 
-resource "aws_dynamodb_table" "stripe_customers" {
-  billing_mode                = "PAY_PER_REQUEST"
-  deletion_protection_enabled = false
-  hash_key                    = "stripe_customer_id"
-  name                        = "staging_altrx-stripe-customers"
-  range_key                   = null
-  read_capacity               = 0
-  stream_enabled              = false
-  table_class                 = "STANDARD"
-  tags                        = { Environment = var.environment }
-  write_capacity              = 0
-  attribute {
-    name = "account"
-    type = "S"
-  }
-  attribute {
-    name = "email"
-    type = "S"
-  }
-  attribute {
-    name = "stripe_customer_id"
-    type = "S"
-  }
-  global_secondary_index {
-    hash_key           = "email"
-    name               = "email-account-index"
-    projection_type    = "ALL"
-    range_key          = "account"
-    read_capacity      = 0
-    write_capacity     = 0
-  }
-}
-
-resource "aws_dynamodb_table" "checkout_submissions" {
-  billing_mode                = "PAY_PER_REQUEST"
-  deletion_protection_enabled = false # False for staging to avoid delete blockages
-  hash_key                    = "submission_token"
-  name                        = "staging_altrx-checkout-submissions"
-  range_key                   = null
-  read_capacity               = 0
-  stream_enabled              = false
-  table_class                 = "STANDARD"
-  tags                        = { Environment = var.environment }
-  write_capacity              = 0
-  attribute {
-    name = "provider_id"
-    type = "S"
-  }
-  attribute {
-    name = "submission_token"
-    type = "S"
-  }
-  global_secondary_index {
-    hash_key           = "provider_id"
-    name               = "provider_id-index"
-    projection_type    = "ALL"
-    read_capacity      = 0
-    write_capacity     = 0
-  }
+module "dynamodb_checkout_submissions" {
+  source       = "../../../../modules/dynamodb"
+  name         = "staging_altrx-checkout-submissions"
+  hash_key     = "submission_token"
+  billing_mode = "PAY_PER_REQUEST"
+  environment  = var.environment
+  project      = var.project
+  attributes = [
+    { name = "provider_id", type = "S" },
+    { name = "submission_token", type = "S" }
+  ]
+  global_secondary_indexes = [
+    {
+      name            = "provider_id-index"
+      hash_key        = "provider_id"
+      projection_type = "ALL"
+    }
+  ]
 }
 
 # =============================================================
 # Consolidated Load Balancing (ALB, Listeners, Target Groups)
 # =============================================================
-resource "aws_lb_listener" "staging_http" {
-  load_balancer_arn                    = aws_lb.staging_alb.arn
-  port                                 = 80
-  protocol                             = "HTTP"
-  routing_http_response_server_enabled = true
-  tags                                 = { Environment = var.environment }
-  default_action {
-    type             = "redirect"
-    redirect {
-      host        = "#{host}"
-      path        = "/#{path}"
-      port        = "443"
-      protocol    = "HTTPS"
-      query       = "#{query}"
-      status_code = "HTTP_301"
-    }
-  }
+module "staging_target_group" {
+  source               = "../../../../modules/target_group"
+  name                 = "backend"
+  port                 = 8000
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  deregistration_delay = 300
+  health_check_path    = "/healthz"
+  health_check_protocol = "HTTP"
+  health_check_port    = "traffic-port"
+  health_check_interval = 30
+  health_check_timeout = 5
+  healthy_threshold   = 5
+  unhealthy_threshold = 2
+  health_check_matcher = "200"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "Staging-Backend"
 }
 
-resource "aws_lb_listener" "staging_https" {
-  certificate_arn                      = "arn:aws:acm:us-east-1:692137657276:certificate/33647a6f-f1c6-4ae8-aa6e-a58602892404"
-  load_balancer_arn                    = aws_lb.staging_alb.arn
-  port                                 = 443
-  protocol                             = "HTTPS"
-  routing_http_response_server_enabled = true
-  ssl_policy                           = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
-  tags                                 = { Environment = var.environment }
-  default_action {
-    target_group_arn = aws_lb_target_group.staging_backend.arn
-    type             = "forward"
-    forward {
-      target_group {
-        arn    = aws_lb_target_group.staging_backend.arn
-        weight = 1
-      }
-    }
-  }
-}
-
-resource "aws_lb_target_group" "staging_backend" {
-  deregistration_delay               = "300"
-  ip_address_type                    = "ipv4"
-  load_balancing_algorithm_type      = "round_robin"
-  load_balancing_anomaly_mitigation  = "off"
-  load_balancing_cross_zone_enabled  = "use_load_balancer_configuration"
-  name                               = "Staging-Backend"
-  port                               = 8000
-  protocol                           = "HTTP"
-  protocol_version                   = "HTTP1"
-  tags                               = { Environment = var.environment }
-  target_type                        = "ip"
-  vpc_id                             = module.vpc.vpc_id
-  health_check {
-    enabled             = true
-    healthy_threshold   = 5
-    interval            = 30
-    matcher             = "200"
-    path                = "/healthz"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
-  }
-}
-
-resource "aws_lb" "staging_alb" {
-  client_keep_alive                           = 3600
-  desync_mitigation_mode                      = "defensive"
-  enable_cross_zone_load_balancing            = true
-  enable_deletion_protection                  = false
-  enable_http2                                = true
-  idle_timeout                                = 60
-  internal                                    = false
-  ip_address_type                             = "ipv4"
-  load_balancer_type                          = "application"
-  name                                        = "Staging-ALB"
-  preserve_host_header                        = false
-  security_groups                             = [aws_security_group.staging_alb.id]
-  subnets                                     = [module.subnets.public_subnet_ids["public1"], module.subnets.public_subnet_ids["public2"]]
-  tags                                        = { Environment = var.environment }
+module "staging_alb" {
+  source               = "../../../../modules/alb"
+  name                 = "alb"
+  internal             = false
+  security_group_ids   = [module.staging_alb_sg.security_group_id]
+  subnet_ids           = [module.subnets.public_subnet_ids["public1"], module.subnets.public_subnet_ids["public2"]]
+  enable_deletion_protection = false
+  idle_timeout         = 60
+  enable_http2         = true
+  http_port            = 80
+  http_default_action  = "redirect_to_https"
+  https_port           = 443
+  certificate_arn      = "arn:aws:acm:us-east-1:692137657276:certificate/33647a6f-f1c6-4ae8-aa6e-a58602892404"
+  https_target_group_arn = module.staging_target_group.target_group_arn
+  ssl_policy           = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "Staging-ALB"
 }
 
 # =============================================================
 # Consolidated SQS Queues
 # =============================================================
-resource "aws_sqs_queue" "staging_altrx_payment_events_dlq" {
-  content_based_deduplication       = false
-  delay_seconds                     = 0
-  fifo_queue                        = false
-  kms_data_key_reuse_period_seconds = 300
-  max_message_size                  = 262144
-  message_retention_seconds         = 1209600
-  name                              = "staging_altrx-payment-events-dlq"
-  receive_wait_time_seconds         = 0
-  sqs_managed_sse_enabled           = true
-  tags                              = { Environment = var.environment }
-  visibility_timeout_seconds        = 30
+module "staging_payment_events_dlq" {
+  source                     = "../../../../modules/sqs"
+  name                       = "payment-events-dlq"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "staging_altrx-payment-events-dlq"
+  visibility_timeout_seconds = 30
+  message_retention_seconds   = 1209600
+  max_message_size            = 262144
+  delay_seconds               = 0
+  receive_wait_time_seconds   = 0
 }
 
-resource "aws_sqs_queue" "staging_altrx_payment_events" {
-  content_based_deduplication       = false
-  delay_seconds                     = 0
-  fifo_queue                        = false
-  kms_data_key_reuse_period_seconds = 300
-  max_message_size                  = 262144
-  message_retention_seconds         = 345600
-  name                              = "staging_altrx-payment-events"
-  policy = jsonencode({
+module "staging_payment_events" {
+  source                     = "../../../../modules/sqs"
+  name                       = "payment-events"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "staging_altrx-payment-events"
+  visibility_timeout_seconds = 30
+  message_retention_seconds   = 345600
+  max_message_size            = 262144
+  delay_seconds               = 0
+  receive_wait_time_seconds   = 0
+  dlq_arn                    = module.staging_payment_events_dlq.queue_arn
+  max_receive_count          = 5
+  policy                     = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -525,25 +418,20 @@ resource "aws_sqs_queue" "staging_altrx_payment_events" {
     }]
     Version = "2012-10-17"
   })
-  receive_wait_time_seconds = 0
-  redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.staging_altrx_payment_events_dlq.arn
-    maxReceiveCount     = 5
-  })
-  sqs_managed_sse_enabled    = true
-  tags                       = { Environment = var.environment }
-  visibility_timeout_seconds = 30
 }
 
-resource "aws_sqs_queue" "altrx_reconciler_trigger_dlq" {
-  content_based_deduplication       = false
-  delay_seconds                     = 0
-  fifo_queue                        = false
-  kms_data_key_reuse_period_seconds = 300
-  max_message_size                  = 262144
-  message_retention_seconds         = 1209600
-  name                              = "altrx-reconciler-trigger-dlq-staging"
-  policy = jsonencode({
+module "reconciler_trigger_dlq" {
+  source                     = "../../../../modules/sqs"
+  name                       = "reconciler-trigger-dlq"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "altrx-reconciler-trigger-dlq-staging"
+  visibility_timeout_seconds = 30
+  message_retention_seconds   = 1209600
+  max_message_size            = 262144
+  delay_seconds               = 0
+  receive_wait_time_seconds   = 0
+  policy                     = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -556,21 +444,22 @@ resource "aws_sqs_queue" "altrx_reconciler_trigger_dlq" {
     }]
     Version = "2012-10-17"
   })
-  receive_wait_time_seconds  = 0
-  sqs_managed_sse_enabled    = true
-  tags                       = { Environment = var.environment }
-  visibility_timeout_seconds = 30
 }
 
-resource "aws_sqs_queue" "altrx_reconciler_trigger" {
-  content_based_deduplication       = false
-  delay_seconds                     = 0
-  fifo_queue                        = false
-  kms_data_key_reuse_period_seconds = 300
-  max_message_size                  = 262144
-  message_retention_seconds         = 345600
-  name                              = "altrx-reconciler-trigger-staging"
-  policy = jsonencode({
+module "reconciler_trigger" {
+  source                     = "../../../../modules/sqs"
+  name                       = "reconciler-trigger"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "altrx-reconciler-trigger-staging"
+  visibility_timeout_seconds = 660
+  message_retention_seconds   = 345600
+  max_message_size            = 262144
+  delay_seconds               = 0
+  receive_wait_time_seconds   = 0
+  dlq_arn                    = module.reconciler_trigger_dlq.queue_arn
+  max_receive_count          = 5
+  policy                     = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -583,15 +472,8 @@ resource "aws_sqs_queue" "altrx_reconciler_trigger" {
     }]
     Version = "2012-10-17"
   })
-  receive_wait_time_seconds = 0
-  redrive_policy = jsonencode({
-    deadLetterTargetArn = aws_sqs_queue.altrx_reconciler_trigger_dlq.arn
-    maxReceiveCount     = 5
-  })
-  sqs_managed_sse_enabled    = true
-  tags                       = { Environment = var.environment }
-  visibility_timeout_seconds = 660
 }
+
 
 # =============================================================
 # Consolidated CloudWatch Logging Groups
@@ -642,9 +524,11 @@ resource "aws_cloudwatch_log_group" "staging_worker_payment" {
 # =============================================================
 # Consolidated IAM Roles & Policies (Fully Isolated Suffixes)
 # =============================================================
-
-
-resource "aws_iam_role" "ecs_task_execution_role" {
+module "iam_ecs_task_execution_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "ECS-Task-execution-role-staging"
+  environment        = var.environment
+  project            = var.project
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRole"
@@ -663,11 +547,16 @@ resource "aws_iam_role" "ecs_task_execution_role" {
     }]
     Version = "2012-10-17"
   })
-  name                  = "ECS-Task-execution-role-staging"
-  path                  = "/"
+  policy_arns = [
+    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  ]
 }
 
-resource "aws_iam_role" "altrx_ssm_role" {
+module "iam_altrx_ssm_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "altrx_ssm_role_staging"
+  environment        = var.environment
+  project            = var.project
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRole"
@@ -678,8 +567,9 @@ resource "aws_iam_role" "altrx_ssm_role" {
     }]
     Version = "2012-10-17"
   })
-  name                  = "altrx_ssm_role_staging"
-  path                  = "/"
+  policy_arns = [
+    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  ]
 }
 
 
@@ -696,7 +586,7 @@ resource "aws_iam_policy" "altrx_reconciler_policy" {
       }, {
       Action   = ["sqs:SendMessage"]
       Effect   = "Allow"
-      Resource = aws_sqs_queue.altrx_reconciler_trigger.arn
+      Resource = module.reconciler_trigger.queue_arn
       Sid      = "SQSSelfChain"
       }, {
       Action   = ["secretsmanager:GetSecretValue"]
@@ -708,60 +598,46 @@ resource "aws_iam_policy" "altrx_reconciler_policy" {
   })
 }
 
-resource "aws_iam_role" "altrx_reconciler_lambda_role" {
-  assume_role_policy = jsonencode({
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "lambda.amazonaws.com"
-      }
-    }]
-    Version = "2012-10-17"
-  })
-  name                  = "AltrxReconcilerLambdaRole-staging"
-  path                  = "/"
-}
-
-# --- IAM Role Policy Attachments ---
-resource "aws_iam_role_policy_attachment" "reconciler_lambda_attach" {
-  role       = aws_iam_role.altrx_reconciler_lambda_role.name
-  policy_arn = aws_iam_policy.altrx_reconciler_policy.arn
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_execution_attach" {
-  role       = aws_iam_role.ecs_task_execution_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "ssm_role_attach" {
-  role       = aws_iam_role.altrx_ssm_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-}
+# Policy attachments are managed directly inside the module.iam_role blocks.
 
 # =============================================================
 
 # Consolidated Compute (ECS, Lambda, Amplify, ECR)
 # =============================================================
-resource "aws_ecr_repository" "staging_worker" {
+module "ecr_staging_worker" {
+  source               = "../../../../modules/ecr"
+  name                 = "worker"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "staging-worker"
   image_tag_mutability = "MUTABLE"
-  name                 = "staging-worker"
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-  image_scanning_configuration {
-    scan_on_push = false
-  }
+  scan_on_push         = false
 }
 
-resource "aws_ecs_task_definition" "staging_backend" {
-  family                   = "staging-backend"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_execution_role.arn
+module "ecs_cluster" {
+  source                    = "../../../../modules/ecs_cluster"
+  cluster_name              = "Staging-Altrx"
+  enable_container_insights = false
+  environment               = var.environment
+  project                   = var.project
+}
+
+module "ecs_backend_service" {
+  source             = "../../../../modules/ecs_service"
+  service_name       = "Staging-Backend"
+  family             = "staging-backend"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  cpu                = "256"
+  memory             = "512"
+  execution_role_arn = module.iam_ecs_task_execution_role.role_arn
+  task_role_arn      = module.iam_ecs_task_execution_role.role_arn
+  desired_count      = 1
+  platform_version   = "1.4.0"
+  launch_type        = var.ecs_launch_type
+  
+  subnet_ids          = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
+  security_group_ids  = [module.staging_be_sg.security_group_id]
+  assign_public_ip    = false
 
   container_definitions = jsonencode([{
     name      = "backend"
@@ -782,100 +658,64 @@ resource "aws_ecs_task_definition" "staging_backend" {
       }
     }
   }])
-}
 
-resource "aws_ecs_service" "staging_backend" {
-  availability_zone_rebalancing      = "ENABLED"
-  cluster                            = aws_ecs_cluster.staging.arn
-  deployment_maximum_percent         = 200
-  deployment_minimum_healthy_percent = 100
-  desired_count                      = 1
-  enable_ecs_managed_tags            = true
-  enable_execute_command             = false
-  name                               = "Staging-Backend"
-  platform_version                   = "1.4.0"
-  scheduling_strategy                = "REPLICA"
-  task_definition                    = aws_ecs_task_definition.staging_backend.arn
-  capacity_provider_strategy {
-    base              = 0
-    capacity_provider = "FARGATE"
-    weight            = 1
-  }
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
-  deployment_controller {
-    type = "ECS"
-  }
-  load_balancer {
-    container_name   = "backend"
-    container_port   = 8000
-    target_group_arn = aws_lb_target_group.staging_backend.arn
-  }
-  network_configuration {
-    assign_public_ip = false
-    security_groups  = [aws_security_group.staging_be.id]
-    subnets          = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
-  }
-}
+  target_group_arn = module.staging_target_group.target_group_arn
+  container_name   = "backend"
+  container_port   = 8000
 
-resource "aws_ecs_cluster" "staging" {
-  name     = "Staging-Altrx"
-  configuration {
-    execute_command_configuration {
-      logging    = "DEFAULT"
+  enable_circuit_breaker = true
+  capacity_providers = [
+    {
+      capacity_provider = "FARGATE"
+      weight            = 1
+      base              = 0
     }
-  }
-  setting {
-    name  = "containerInsights"
-    value = "disabled"
-  }
+  ]
+
+  environment = var.environment
+  project     = var.project
 }
 
-resource "aws_lambda_function" "altrx_reconciler" {
-  architectures                      = ["x86_64"]
-  function_name                      = "altrx-reconciler-staging"
-  image_uri                          = "692137657276.dkr.ecr.us-east-1.amazonaws.com/altrx-reconciler:v-26-05-1527" # Staging reconciler image
-  memory_size                        = 512
-  package_type                       = "Image"
-  reserved_concurrent_executions     = -1
-  role                               = aws_iam_role.altrx_reconciler_lambda_role.arn
-  timeout                            = 600
-  environment {
-    variables = var.reconciler_env_vars
-  }
-  ephemeral_storage {
-    size = 512
-  }
-  logging_config {
-    log_format            = "Text"
-    log_group             = aws_cloudwatch_log_group.reconciler.name
-  }
-  tracing_config {
-    mode = "PassThrough"
-  }
+module "lambda_reconciler" {
+  source                     = "../../../../modules/lambda"
+  function_name              = "reconciler"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "altrx-reconciler-staging"
+  role_name_override         = "AltrxReconcilerLambdaRole-staging"
+  image_uri                  = "692137657276.dkr.ecr.us-east-1.amazonaws.com/altrx-reconciler:v-26-05-1527"
+  memory_size                = 512
+  timeout                    = 600
+  environment_variables      = var.reconciler_env_vars
+  additional_policy_arns     = [aws_iam_policy.altrx_reconciler_policy.arn]
 }
 
-resource "aws_ecr_repository" "reconciler" {
+module "ecr_reconciler" {
+  source               = "../../../../modules/ecr"
+  name                 = "reconciler"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "staging-reconciler"
   image_tag_mutability = "MUTABLE"
-  name                 = "staging-reconciler"
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-  image_scanning_configuration {
-    scan_on_push = true
-  }
+  scan_on_push         = true
 }
 
-resource "aws_ecs_task_definition" "staging_worker_payment" {
-  family                   = "Staging-Worker-Payment"
-  network_mode             = "awsvpc"
-  requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "512"
-  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
-  task_role_arn            = aws_iam_role.ecs_task_execution_role.arn
+module "ecs_worker_service" {
+  source             = "../../../../modules/ecs_service"
+  service_name       = "Staging-Worker-Payment"
+  family             = "Staging-Worker-Payment"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  cpu                = "256"
+  memory             = "512"
+  execution_role_arn = module.iam_ecs_task_execution_role.role_arn
+  task_role_arn      = module.iam_ecs_task_execution_role.role_arn
+  desired_count      = 1
+  platform_version   = "LATEST"
+  launch_type        = var.ecs_launch_type
+  
+  subnet_ids          = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
+  security_group_ids  = [module.staging_worker_sg.security_group_id]
+  assign_public_ip    = true
 
   container_definitions = jsonencode([{
     name      = "worker-payment"
@@ -892,47 +732,28 @@ resource "aws_ecs_task_definition" "staging_worker_payment" {
       }
     }
   }])
+
+  enable_circuit_breaker = true
+  capacity_providers = [
+    {
+      capacity_provider = "FARGATE"
+      weight            = 1
+      base              = 0
+    }
+  ]
+
+  environment = var.environment
+  project     = var.project
 }
 
-resource "aws_ecs_service" "staging_worker_payment" {
-  availability_zone_rebalancing      = "ENABLED"
-  cluster                            = aws_ecs_cluster.staging.arn
-  deployment_maximum_percent         = 200
-  deployment_minimum_healthy_percent = 100
-  desired_count                      = 1 # Sized down for staging cost-efficiency
-  enable_ecs_managed_tags            = true
-  enable_execute_command             = false
-  name                               = "Staging-Worker-Payment"
-  platform_version                   = "LATEST"
-  scheduling_strategy                = "REPLICA"
-  task_definition                    = aws_ecs_task_definition.staging_worker_payment.arn
-  capacity_provider_strategy {
-    base              = 0
-    capacity_provider = "FARGATE"
-    weight            = 1
-  }
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
-  deployment_controller {
-    type = "ECS"
-  }
-  network_configuration {
-    assign_public_ip = true
-    security_groups  = [aws_security_group.staging_worker.id]
-    subnets          = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
-  }
-}
-
-resource "aws_ecr_repository" "staging_backend" {
+module "ecr_staging_backend" {
+  source               = "../../../../modules/ecr"
+  name                 = "backend"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "staging-backend"
   image_tag_mutability = "MUTABLE"
-  name                 = "staging-backend"
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-  image_scanning_configuration {
-    scan_on_push = false
-  }
+  scan_on_push         = false
 }
+
 

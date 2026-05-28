@@ -3,7 +3,7 @@
 # -------
 
 resource "aws_lb" "alb" {
-    name               = "${var.environment}-${var.project}-${var.name}-alb"
+    name               = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}-alb"
     internal           = var.internal
     load_balancer_type = "application"
     security_groups    = var.security_group_ids

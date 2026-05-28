@@ -3,7 +3,7 @@
 # -------
 
 resource "aws_iam_role" "lambda" {
-    name = "${var.environment}-${var.project}-${var.function_name}-role"
+    name = var.role_name_override != null ? var.role_name_override : "${var.environment}-${var.project}-${var.function_name}-role"
 
     assume_role_policy = jsonencode({
         Version = "2012-10-17"
@@ -17,7 +17,7 @@ resource "aws_iam_role" "lambda" {
     })
 
     tags = {
-        Name        = "${var.environment}-${var.project}-${var.function_name}-role"
+        Name        = var.role_name_override != null ? var.role_name_override : "${var.environment}-${var.project}-${var.function_name}-role"
         Environment = var.environment
         Project     = var.project
     }
@@ -49,10 +49,11 @@ resource "aws_iam_role_policy_attachment" "additional" {
 # -------
 
 resource "aws_lambda_function" "lambda" {
-    function_name = "${var.environment}-${var.project}-${var.function_name}"
+    function_name = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.function_name}"
     role          = aws_iam_role.lambda.arn
     runtime       = var.image_uri == null ? var.runtime : null
     handler       = var.image_uri == null ? var.handler : null
+    package_type  = var.image_uri != null ? "Image" : "Zip"
 
     # Deployment package — exactly one of these should be set
     filename         = var.filename

@@ -36,3 +36,13 @@ variable "environment" {
 variable "project" {
     type = string
 }
+
+variable "name_override" {
+    type    = string
+    default = null
+}
+
+variable "description" {
+    type    = string
+    default = null
+}

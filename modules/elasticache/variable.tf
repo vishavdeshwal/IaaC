@@ -125,3 +125,14 @@ variable "environment" {
 variable "project" {
     type = string
 }
+
+variable "name_override" {
+    type    = string
+    default = null
+}
+
+variable "subnet_group_name_override" {
+    type    = string
+    default = null
+}
+

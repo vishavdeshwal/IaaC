@@ -96,3 +96,9 @@ variable "environment" {
 variable "project" {
     type = string
 }
+
+variable "name_override" {
+    type    = string
+    default = null
+}
+

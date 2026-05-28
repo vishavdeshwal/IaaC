@@ -3,7 +3,7 @@
 # -------
 
 resource "aws_ecr_repository" "repo" {
-    name                 = lower("${var.environment}-${var.project}-${var.name}")
+    name                 = var.name_override != null ? var.name_override : lower("${var.environment}-${var.project}-${var.name}")
     image_tag_mutability = var.image_tag_mutability
 
     image_scanning_configuration {

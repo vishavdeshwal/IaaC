@@ -1,6 +1,6 @@
 locals {
     # FIFO queues require the .fifo suffix
-    queue_name = var.fifo_queue ? "${var.environment}-${var.project}-${var.name}.fifo" : "${var.environment}-${var.project}-${var.name}"
+    queue_name = var.name_override != null ? var.name_override : (var.fifo_queue ? "${var.environment}-${var.project}-${var.name}.fifo" : "${var.environment}-${var.project}-${var.name}")
 
     redrive_policy = var.dlq_arn != null ? jsonencode({
         deadLetterTargetArn = var.dlq_arn
@@ -20,6 +20,7 @@ resource "aws_sqs_queue" "queue" {
     receive_wait_time_seconds   = var.receive_wait_time_seconds
 
     redrive_policy = local.redrive_policy
+    policy         = var.policy
 
     tags = {
         Name        = local.queue_name

@@ -110,3 +110,14 @@ variable "environment" {
 variable "project" {
     type = string
 }
+
+variable "name_override" {
+    type    = string
+    default = null
+}
+
+variable "role_name_override" {
+    type    = string
+    default = null
+}
+
