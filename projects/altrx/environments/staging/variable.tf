@@ -63,3 +63,10 @@ variable "ecs_launch_type" {
   default     = "FARGATE"
   description = "The launch type for ECS services (FARGATE or EC2)"
 }
+
+variable "bastion_key_name" {
+  type        = string
+  default     = null
+  description = "Name of the existing AWS SSH key pair to attach to the Bastion. If null, access can still be obtained via AWS SSM."
+}
+

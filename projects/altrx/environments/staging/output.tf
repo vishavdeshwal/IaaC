@@ -42,3 +42,14 @@ output "dynamodb_stripe_customers_id" {
   value       = module.dynamodb_stripe_customers.table_id
   description = "Name of the stripe-customers DynamoDB table"
 }
+
+output "bastion_public_ip" {
+  value       = module.staging_bastion.public_ip
+  description = "The public IP of the Bastion Host"
+}
+
+output "bastion_instance_id" {
+  value       = module.staging_bastion.instance_id
+  description = "The Instance ID of the Bastion (used for SSM tunneling)"
+}
+

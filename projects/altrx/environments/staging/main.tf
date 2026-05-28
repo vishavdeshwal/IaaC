@@ -99,16 +99,16 @@ module "staging_redis_sg" {
     to_port         = 6379
     protocol        = "tcp"
     cidr_blocks     = []
-    security_groups = [module.staging_be_sg.security_group_id]
-    description     = "Allows Redis traffic"
+    security_groups = [module.staging_be_sg.security_group_id, module.staging_bastion_sg.security_group_id]
+    description     = "Allows Redis traffic from Backend and Bastion"
   }]
 
   egress_rules = [{
     from_port       = 6379
     to_port         = 6379
     protocol        = "tcp"
-    cidr_blocks     = []
-    security_groups = [module.staging_be_sg.security_group_id]
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
     description     = "Allows Redis traffic"
   }]
 }
@@ -237,6 +237,53 @@ module "staging_wordpress_sg" {
     security_groups = []
     description     = "Allows all outbound traffic"
   }]
+}
+
+module "staging_bastion_sg" {
+  source        = "../../../../modules/security_groups"
+  name          = "bastion"
+  vpc_id        = module.vpc.vpc_id
+  environment   = var.environment
+  project       = var.project
+  name_override = "Staging-Bastion-SG"
+  description   = "Allows SSH traffic to Bastion"
+
+  ingress_rules = [{
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = "Allow public SSH"
+  }]
+
+  egress_rules = [{
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = "Allow all outbound"
+  }]
+}
+
+resource "aws_iam_instance_profile" "bastion_profile" {
+  name = "staging-bastion-instance-profile"
+  role = module.iam_altrx_ssm_role.role_name
+}
+
+module "staging_bastion" {
+  source               = "../../../../modules/ec2"
+  name                 = "bastion"
+  ami_id               = "ami-0c7217cdde317cfec" # Amazon Linux 2023 AMI in us-east-1
+  instance_type        = "t3.micro"
+  subnet_id            = module.subnets.public_subnet_ids["public1"]
+  security_group_ids   = [module.staging_bastion_sg.security_group_id]
+  associate_public_ip  = true
+  iam_instance_profile = aws_iam_instance_profile.bastion_profile.name
+  key_name             = var.bastion_key_name
+  environment          = var.environment
+  project              = var.project
 }
 
 
