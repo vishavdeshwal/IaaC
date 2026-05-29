@@ -1,52 +1,52 @@
 terraform {
-    required_version = ">= 1.5.0"
-    required_providers {
-      aws = {
-        source  = "hashicorp/aws"
-        version = "~> 5.0"
-      }
+  required_version = ">= 1.5.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
-    backend "s3" {
-        bucket       = "altrx-terraform-state-993197"
-        key          = "altrx/prod/terraform.tfstate"
-        region       = "us-east-1"
-        profile      = "altrx"
-        use_lockfile = true
-        encrypt      = true
-    }
+  }
+  backend "s3" {
+    bucket       = "altrx-terraform-state-993197"
+    key          = "altrx/prod/terraform.tfstate"
+    region       = "us-east-1"
+    profile      = "altrx"
+    use_lockfile = true
+    encrypt      = true
+  }
 }
 
 provider "aws" {
-    region  = var.aws_region
-    profile = var.aws_profile 
+  region  = var.aws_region
+  profile = var.aws_profile
 }
 
 
 
 module "vpc" {
-    source               = "../../../../modules/vpc"
-    vpc_cidr             = var.vpc_cidr
-    instance_tenancy     = var.instance_tenancy
-    enable_dns_hostnames = var.enable_dns_hostnames
-    enable_dns_support   = var.enable_dns_support
-    environment          = var.environment
-    project              = var.project
+  source               = "../../../../modules/vpc"
+  vpc_cidr             = var.vpc_cidr
+  instance_tenancy     = var.instance_tenancy
+  enable_dns_hostnames = var.enable_dns_hostnames
+  enable_dns_support   = var.enable_dns_support
+  environment          = var.environment
+  project              = var.project
 }
 
 module "subnets" {
-    source          = "../../../../modules/subnets"
-    vpc_id          = module.vpc.vpc_id
-    public_subnets  = var.public_subnets
-    private_subnets = var.private_subnets
-    environment     = var.environment
-    project         = var.project
+  source          = "../../../../modules/subnets"
+  vpc_id          = module.vpc.vpc_id
+  public_subnets  = var.public_subnets
+  private_subnets = var.private_subnets
+  environment     = var.environment
+  project         = var.project
 }
 
 module "igw" {
-    source      = "../../../../modules/igw"
-    vpc_id      = module.vpc.vpc_id
-    environment = var.environment
-    project     = var.project
+  source      = "../../../../modules/igw"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 }
 
 
@@ -55,13 +55,13 @@ module "igw" {
 # =============================================================
 
 module "prod_redis_sg" {
-  source      = "../../../../modules/security_groups"
-  name        = "redis"
-  vpc_id      = module.vpc.vpc_id
-  environment = var.environment
-  project     = var.project
+  source        = "../../../../modules/security_groups"
+  name          = "redis"
+  vpc_id        = module.vpc.vpc_id
+  environment   = var.environment
+  project       = var.project
   name_override = "Prod-Redis-Sg"
-  description = "Allows Redis traffic"
+  description   = "Allows Redis traffic"
 
   ingress_rules = [{
     from_port       = 6379
@@ -83,13 +83,13 @@ module "prod_redis_sg" {
 }
 
 module "prod_alb_sg" {
-  source      = "../../../../modules/security_groups"
-  name        = "alb"
-  vpc_id      = module.vpc.vpc_id
-  environment = var.environment
-  project     = var.project
+  source        = "../../../../modules/security_groups"
+  name          = "alb"
+  vpc_id        = module.vpc.vpc_id
+  environment   = var.environment
+  project       = var.project
   name_override = "Prod-ALB-SG"
-  description = "It allows internet traffic"
+  description   = "It allows internet traffic"
 
   ingress_rules = [{
     from_port       = 443
@@ -149,13 +149,13 @@ resource "aws_security_group" "default" {
 }
 
 module "prod_be_sg" {
-  source      = "../../../../modules/security_groups"
-  name        = "be"
-  vpc_id      = module.vpc.vpc_id
-  environment = var.environment
-  project     = var.project
+  source        = "../../../../modules/security_groups"
+  name          = "be"
+  vpc_id        = module.vpc.vpc_id
+  environment   = var.environment
+  project       = var.project
   name_override = "Prod-BE-SG"
-  description = "Allow ALB Traffic"
+  description   = "Allow ALB Traffic"
 
   ingress_rules = [{
     from_port       = 8000
@@ -177,13 +177,13 @@ module "prod_be_sg" {
 }
 
 module "prod_worker_sg" {
-  source      = "../../../../modules/security_groups"
-  name        = "worker"
-  vpc_id      = module.vpc.vpc_id
-  environment = var.environment
-  project     = var.project
+  source        = "../../../../modules/security_groups"
+  name          = "worker"
+  vpc_id        = module.vpc.vpc_id
+  environment   = var.environment
+  project       = var.project
   name_override = "Worker-SG"
-  description = "Allow Outbound and Inbound specific"
+  description   = "Allow Outbound and Inbound specific"
 
   ingress_rules = []
 
@@ -198,13 +198,13 @@ module "prod_worker_sg" {
 }
 
 module "prod_wordpress_sg" {
-  source      = "../../../../modules/security_groups"
-  name        = "wordpress"
-  vpc_id      = module.vpc.vpc_id
-  environment = var.environment
-  project     = var.project
+  source        = "../../../../modules/security_groups"
+  name          = "wordpress"
+  vpc_id        = module.vpc.vpc_id
+  environment   = var.environment
+  project       = var.project
   name_override = "wordpress-sg"
-  description = "launch-wizard-1 created 2026-04-20T18:09:51.774Z"
+  description   = "launch-wizard-1 created 2026-04-20T18:09:51.774Z"
 
   ingress_rules = [{
     from_port       = 22
@@ -314,13 +314,13 @@ module "dynamodb_stripe_customers" {
 }
 
 module "dynamodb_checkout_submissions" {
-  source       = "../../../../modules/dynamodb"
-  name         = "production_altrx-checkout-submissions"
-  hash_key     = "submission_token"
-  billing_mode = "PAY_PER_REQUEST"
+  source                      = "../../../../modules/dynamodb"
+  name                        = "production_altrx-checkout-submissions"
+  hash_key                    = "submission_token"
+  billing_mode                = "PAY_PER_REQUEST"
   deletion_protection_enabled = true
-  environment  = var.environment
-  project      = var.project
+  environment                 = var.environment
+  project                     = var.project
   attributes = [
     { name = "provider_id", type = "S" },
     { name = "submission_token", type = "S" }
@@ -340,44 +340,44 @@ module "dynamodb_checkout_submissions" {
 # =============================================================
 
 module "prod_target_group" {
-  source               = "../../../../modules/target_group"
-  name                 = "backend"
-  port                 = 8000
-  protocol             = "HTTP"
-  target_type          = "ip"
-  vpc_id               = module.vpc.vpc_id
-  deregistration_delay = 300
-  health_check_path    = "/healthz"
+  source                = "../../../../modules/target_group"
+  name                  = "backend"
+  port                  = 8000
+  protocol              = "HTTP"
+  target_type           = "ip"
+  vpc_id                = module.vpc.vpc_id
+  deregistration_delay  = 300
+  health_check_path     = "/healthz"
   health_check_protocol = "HTTP"
-  health_check_port    = "traffic-port"
+  health_check_port     = "traffic-port"
   health_check_interval = 30
-  health_check_timeout = 5
-  healthy_threshold   = 5
-  unhealthy_threshold = 2
-  health_check_matcher = "200"
-  environment          = var.environment
-  project              = var.project
-  name_override        = "Prod-Backend"
+  health_check_timeout  = 5
+  healthy_threshold     = 5
+  unhealthy_threshold   = 2
+  health_check_matcher  = "200"
+  environment           = var.environment
+  project               = var.project
+  name_override         = "Prod-Backend"
 }
 
 module "prod_alb" {
-  source               = "../../../../modules/alb"
-  name                 = "alb"
-  internal             = false
-  security_group_ids   = [module.prod_alb_sg.security_group_id]
-  subnet_ids           = [module.subnets.public_subnet_ids["public2"], module.subnets.public_subnet_ids["public1"]]
+  source                     = "../../../../modules/alb"
+  name                       = "alb"
+  internal                   = false
+  security_group_ids         = [module.prod_alb_sg.security_group_id]
+  subnet_ids                 = [module.subnets.public_subnet_ids["public2"], module.subnets.public_subnet_ids["public1"]]
   enable_deletion_protection = false
-  idle_timeout         = 60
-  enable_http2         = true
-  http_port            = 80
-  http_default_action  = "redirect_to_https"
-  https_port           = 443
-  certificate_arn      = "arn:aws:acm:us-east-1:692137657276:certificate/33647a6f-f1c6-4ae8-aa6e-a58602892404"
-  https_target_group_arn = module.prod_target_group.target_group_arn
-  ssl_policy           = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
-  environment          = var.environment
-  project              = var.project
-  name_override        = "Prod-ALB"
+  idle_timeout               = 60
+  enable_http2               = true
+  http_port                  = 80
+  http_default_action        = "redirect_to_https"
+  https_port                 = 443
+  certificate_arn            = "arn:aws:acm:us-east-1:692137657276:certificate/33647a6f-f1c6-4ae8-aa6e-a58602892404"
+  https_target_group_arn     = module.prod_target_group.target_group_arn
+  ssl_policy                 = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "Prod-ALB"
 }
 
 
@@ -392,10 +392,10 @@ module "prod_payment_events_dlq" {
   project                    = var.project
   name_override              = "production_altrx-payment-events-dlq"
   visibility_timeout_seconds = 30
-  message_retention_seconds   = 1209600
-  max_message_size            = 262144
-  delay_seconds               = 0
-  receive_wait_time_seconds   = 0
+  message_retention_seconds  = 1209600
+  max_message_size           = 262144
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 0
 }
 
 module "prod_payment_events" {
@@ -405,13 +405,13 @@ module "prod_payment_events" {
   project                    = var.project
   name_override              = "production_altrx-payment-events"
   visibility_timeout_seconds = 30
-  message_retention_seconds   = 345600
-  max_message_size            = 262144
-  delay_seconds               = 0
-  receive_wait_time_seconds   = 0
+  message_retention_seconds  = 345600
+  max_message_size           = 262144
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 0
   dlq_arn                    = module.prod_payment_events_dlq.queue_arn
   max_receive_count          = 5
-  policy                     = jsonencode({
+  policy = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -433,11 +433,11 @@ module "prod_reconciler_trigger_dlq" {
   project                    = var.project
   name_override              = "altrx-reconciler-trigger-dlq"
   visibility_timeout_seconds = 30
-  message_retention_seconds   = 1209600
-  max_message_size            = 262144
-  delay_seconds               = 0
-  receive_wait_time_seconds   = 0
-  policy                     = jsonencode({
+  message_retention_seconds  = 1209600
+  max_message_size           = 262144
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 0
+  policy = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -459,13 +459,13 @@ module "prod_reconciler_trigger" {
   project                    = var.project
   name_override              = "altrx-reconciler-trigger"
   visibility_timeout_seconds = 660
-  message_retention_seconds   = 345600
-  max_message_size            = 262144
-  delay_seconds               = 0
-  receive_wait_time_seconds   = 0
+  message_retention_seconds  = 345600
+  max_message_size           = 262144
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 0
   dlq_arn                    = module.prod_reconciler_trigger_dlq.queue_arn
   max_receive_count          = 5
-  policy                     = jsonencode({
+  policy = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -674,11 +674,31 @@ resource "aws_iam_policy" "amplify_ssr_logging_policy" {
   tags_all = {}
 }
 
+resource "aws_iam_policy" "ecs_s3_env_policy" {
+  name        = "${var.environment}-ecs-s3-env-policy"
+  path        = "/"
+  policy = jsonencode({
+    Statement = [{
+      Action   = ["s3:GetObject"]
+      Effect   = "Allow"
+      Resource = [
+        "arn:aws:s3:::production-${lower(var.project)}-v3-uploads/worker-env/worker.env",
+        "arn:aws:s3:::production-${lower(var.project)}-v3-uploads/backend-env/backend.env"
+      ]
+      }, {
+      Action   = ["s3:GetBucketLocation"]
+      Effect   = "Allow"
+      Resource = "arn:aws:s3:::production-${lower(var.project)}-v3-uploads"
+    }]
+    Version = "2012-10-17"
+  })
+}
+
 module "iam_ecs_task_execution_role" {
-  source             = "../../../../modules/iam_role"
-  name               = "ECS-Task-execution-role"
-  environment        = var.environment
-  project            = var.project
+  source      = "../../../../modules/iam_role"
+  name        = "ECS-Task-execution-role"
+  environment = var.environment
+  project     = var.project
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRole"
@@ -702,11 +722,65 @@ module "iam_ecs_task_execution_role" {
   ]
 }
 
+resource "aws_iam_role_policy_attachment" "ecs_s3_env_attachment" {
+  role       = module.iam_ecs_task_execution_role.role_name
+  policy_arn = aws_iam_policy.ecs_s3_env_policy.arn
+}
+
+resource "aws_iam_policy" "ecs_dynamodb_sqs_policy" {
+  name        = "production-ecs-dynamodb-sqs-policy"
+  path        = "/"
+  policy = jsonencode({
+    Statement = [{
+      Action   = [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:DescribeTable",
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem"
+      ]
+      Effect   = "Allow"
+      Resource = [
+        "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-*",
+        "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-*/index/*"
+      ]
+      Sid      = "DynamoDBAccess"
+      }, {
+      Action   = [
+        "sqs:SendMessage",
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage",
+        "sqs:GetQueueAttributes",
+        "sqs:GetQueueUrl",
+        "sqs:ChangeMessageVisibility"
+      ]
+      Effect   = "Allow"
+      Resource = [
+        "arn:aws:sqs:us-east-1:692137657276:production_altrx-*",
+        "arn:aws:sqs:us-east-1:692137657276:altrx-reconciler-trigger",
+        "arn:aws:sqs:us-east-1:692137657276:altrx-reconciler-trigger-dlq"
+      ]
+      Sid      = "SQSAccess"
+    }]
+    Version = "2012-10-17"
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_dynamodb_sqs_attachment" {
+  role       = module.iam_ecs_task_execution_role.role_name
+  policy_arn = aws_iam_policy.ecs_dynamodb_sqs_policy.arn
+}
+
+
 module "iam_altrx_ssm_role" {
-  source             = "../../../../modules/iam_role"
-  name               = "altrx_ssm_role"
-  environment        = var.environment
-  project            = var.project
+  source      = "../../../../modules/iam_role"
+  name        = "altrx_ssm_role"
+  environment = var.environment
+  project     = var.project
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRole"
@@ -722,68 +796,12 @@ module "iam_altrx_ssm_role" {
   ]
 }
 
-resource "aws_iam_policy" "custom_s3_vishal_ai_policy" {
-  description = null
-  name        = "Custom_S3_Vishal_ai"
-  path        = "/"
-  policy = jsonencode({
-    Statement = [{
-      Action   = ["s3:PutBucketCORS", "s3:GetBucketCORS"]
-      Effect   = "Allow"
-      Resource = "arn:aws:s3:::production-altrx-v3-uploads"
-      }, {
-      Action   = ["s3:PutObject", "s3:PutObjectAcl"]
-      Effect   = "Allow"
-      Resource = "arn:aws:s3:::production-altrx-v3-uploads/worker-env/worker.env"
-      Sid      = "WriteWorkerEnv"
-      }, {
-      Action   = ["ecs:UpdateService"]
-      Effect   = "Allow"
-      Resource = "arn:aws:ecs:us-east-1:692137657276:service/Prod-Altrx/Prod-Worker"
-      Sid      = "RestartWorker"
-      }, {
-      Action   = ["sqs:StartMessageMoveTask", "sqs:ListMessageMoveTasks"]
-      Effect   = "Allow"
-      Resource = ["arn:aws:sqs:us-east-1:692137657276:production_altrx-payment-events", "arn:aws:sqs:us-east-1:692137657276:production_altrx-payment-events-dlq"]
-      Sid      = "DrainDLQ"
-      }, {
-      Action   = ["s3:CreateBucket", "s3:PutBucketPublicAccessBlock", "s3:GetBucketPublicAccessBlock", "s3:PutEncryptionConfiguration", "s3:GetEncryptionConfiguration", "s3:PutBucketCORS", "s3:GetBucketCORS", "s3:PutLifecycleConfiguration", "s3:GetLifecycleConfiguration", "s3:PutBucketTagging", "s3:GetBucketTagging", "s3:GetBucketLocation", "s3:ListBucket"]
-      Effect   = "Allow"
-      Resource = ["arn:aws:s3:::staging-altrx-v3-uploads", "arn:aws:s3:::preprod-altrx-v3-uploads"]
-      Sid      = "ProvisionAltrxV3UploadBuckets"
-      }, {
-      Action   = ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"]
-      Effect   = "Allow"
-      Resource = ["arn:aws:s3:::staging-altrx-v3-uploads/v3/pen-uploads/*", "arn:aws:s3:::preprod-altrx-v3-uploads/v3/pen-uploads/*"]
-      Sid      = "SmokeTestObjectsInAltrxV3UploadBuckets"
-      }, {
-      Action = "lambda:ListFunctions"
-      Condition = {
-        StringEquals = {
-          "aws:RequestedRegion" = "us-east-1"
-        }
-      }
-      Effect   = "Allow"
-      Resource = "*"
-      Sid      = "ListLambdaInUsEast1Only"
-      }, {
-      Action   = "lambda:GetFunctionConfiguration"
-      Effect   = "Allow"
-      Resource = ["arn:aws:lambda:us-east-1:692137657276:function:amplify-d9m305ipl0ufl-*", "arn:aws:lambda:us-east-1:692137657276:function:amplify-d1onpspxsudhmw-*"]
-      Sid      = "ReadAmplifySSRFunctionConfig"
-    }]
-    Version = "2012-10-17"
-  })
-  tags     = {}
-  tags_all = {}
-}
-
 module "iam_amplify_ssr_logging_role" {
-  source             = "../../../../modules/iam_role"
-  name               = "AmplifySSRLoggingRole-638507c3-6940-4947-b58d-16f5ca25c35a"
-  path               = "/service-role/"
-  environment        = var.environment
-  project            = var.project
+  source      = "../../../../modules/iam_role"
+  name        = "AmplifySSRLoggingRole-638507c3-6940-4947-b58d-16f5ca25c35a"
+  path        = "/service-role/"
+  environment = var.environment
+  project     = var.project
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRole"
@@ -863,9 +881,14 @@ module "ecs_backend_service" {
   launch_type                  = var.ecs_launch_type
   task_definition_arn_override = "prod-backend:11"
 
-  subnet_ids          = [module.subnets.private_subnet_ids["private3"], module.subnets.private_subnet_ids["private4"]]
-  security_group_ids  = [module.prod_be_sg.security_group_id]
-  assign_public_ip    = false
+  subnet_ids         = [module.subnets.private_subnet_ids["private3"], module.subnets.private_subnet_ids["private4"]]
+  security_group_ids = [module.prod_be_sg.security_group_id]
+  assign_public_ip   = false
+
+  depends_on = [
+    aws_iam_role_policy_attachment.ecs_s3_env_attachment,
+    aws_iam_role_policy_attachment.ecs_dynamodb_sqs_attachment
+  ]
 
   container_definitions = jsonencode([{
     name      = "backend"
@@ -876,6 +899,10 @@ module "ecs_backend_service" {
     portMappings = [{
       containerPort = 8000
       hostPort      = 8000
+    }]
+    environmentFiles = [{
+      value = "arn:aws:s3:::production-${lower(var.project)}-v3-uploads/backend-env/backend.env"
+      type  = "s3"
     }]
     logConfiguration = {
       logDriver = "awslogs"
@@ -905,17 +932,17 @@ module "ecs_backend_service" {
 }
 
 module "lambda_reconciler" {
-  source                     = "../../../../modules/lambda"
-  function_name              = "reconciler"
-  environment                = var.environment
-  project                    = var.project
-  name_override              = "altrx-reconciler"
-  role_name_override         = "AltrxReconcilerLambdaRole"
-  image_uri                  = "692137657276.dkr.ecr.us-east-1.amazonaws.com/altrx-reconciler:v-26-05-1527"
-  memory_size                = 512
-  timeout                    = 600
-  environment_variables      = var.reconciler_env_vars
-  additional_policy_arns     = [aws_iam_policy.altrx_reconciler_policy.arn]
+  source                 = "../../../../modules/lambda"
+  function_name          = "reconciler"
+  environment            = var.environment
+  project                = var.project
+  name_override          = "altrx-reconciler"
+  role_name_override     = "AltrxReconcilerLambdaRole"
+  image_uri              = "692137657276.dkr.ecr.us-east-1.amazonaws.com/altrx-reconciler:v-26-05-1527"
+  memory_size            = 512
+  timeout                = 600
+  environment_variables  = var.reconciler_env_vars
+  additional_policy_arns = [aws_iam_policy.altrx_reconciler_policy.arn]
 }
 
 module "ecr_reconciler" {
@@ -942,9 +969,14 @@ module "ecs_worker_service" {
   launch_type                  = var.ecs_launch_type
   task_definition_arn_override = "Prod-Worker-Payment:4"
 
-  subnet_ids          = [module.subnets.private_subnet_ids["private3"], module.subnets.private_subnet_ids["private4"]]
-  security_group_ids  = [module.prod_worker_sg.security_group_id]
-  assign_public_ip    = true
+  subnet_ids         = [module.subnets.private_subnet_ids["private3"], module.subnets.private_subnet_ids["private4"]]
+  security_group_ids = [module.prod_worker_sg.security_group_id]
+  assign_public_ip   = true
+
+  depends_on = [
+    aws_iam_role_policy_attachment.ecs_s3_env_attachment,
+    aws_iam_role_policy_attachment.ecs_dynamodb_sqs_attachment
+  ]
 
   container_definitions = jsonencode([{
     name      = "worker-payment"
@@ -952,6 +984,10 @@ module "ecs_worker_service" {
     cpu       = 256
     memory    = 512
     essential = true
+    environmentFiles = [{
+      value = "arn:aws:s3:::production-${lower(var.project)}-v3-uploads/worker-env/worker.env"
+      type  = "s3"
+    }]
     logConfiguration = {
       logDriver = "awslogs"
       options = {
@@ -1101,3 +1137,17 @@ resource "aws_amplify_app" "production" {
     target    = "/index.html"
   }
 }
+
+# Consolidated S3 Storage (Importing existing bucket)
+# =============================================================
+resource "aws_s3_bucket" "uploads" {
+  bucket = var.environment == "prod" ? "production-${lower(var.project)}-v3-uploads" : "${var.environment}-${lower(var.project)}-v3-uploads"
+
+  tags = {
+    Name        = var.environment == "prod" ? "production-${lower(var.project)}-v3-uploads" : "${var.environment}-${lower(var.project)}-v3-uploads"
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+
