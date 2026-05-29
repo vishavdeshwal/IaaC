@@ -25,3 +25,6 @@ crash.*.log
 # Ignore OS-specific files
 .DS_Store
 Thumbs.db
+
+# All types of .env
+*.env

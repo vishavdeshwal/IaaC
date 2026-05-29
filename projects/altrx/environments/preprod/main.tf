@@ -870,3 +870,20 @@ resource "aws_s3_bucket" "uploads" {
     Project     = var.project
   }
 }
+
+resource "aws_s3_bucket_cors_configuration" "uploads_cors" {
+  bucket = aws_s3_bucket.uploads.id
+
+  cors_rule {
+    allowed_headers = ["Content-Type"]
+    allowed_methods = ["PUT"]
+    allowed_origins = [
+      "https://staging-ths.altrx.com",
+      "https://staging.d1onpspxsudhmw.amplifyapp.com",
+      "https://d1onpspxsudhmw.amplifyapp.com",
+      "http://localhost:3000"
+    ]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
