@@ -57,3 +57,9 @@ variable "reconciler_env_vars" {
   description = "Environment variables for the altrx-reconciler Lambda function"
   sensitive   = true
 }
+
+variable "ecs_launch_type" {
+  type        = string
+  default     = null
+  description = "Launch type for ECS Services (null when using capacity provider strategies)"
+}

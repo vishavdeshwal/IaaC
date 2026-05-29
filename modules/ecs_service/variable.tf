@@ -126,3 +126,9 @@ variable "launch_type" {
   default     = null
   description = "The launch type on which to run your service (FARGATE, EC2, or EXTERNAL). If using capacity provider strategies, leave as null."
 }
+
+variable "task_definition_arn_override" {
+  type        = string
+  default     = null
+  description = "If provided, bypasses creating a task definition and uses this active ARN/family:revision instead"
+}

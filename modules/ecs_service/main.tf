@@ -1,4 +1,5 @@
 resource "aws_ecs_task_definition" "task" {
+  count                    = var.task_definition_arn_override == null ? 1 : 0
   family                   = var.family
   network_mode             = "awsvpc"
   requires_compatibilities = var.requires_compatibilities
@@ -18,7 +19,7 @@ resource "aws_ecs_task_definition" "task" {
 resource "aws_ecs_service" "service" {
   name                               = var.service_name
   cluster                            = var.cluster_arn
-  task_definition                    = aws_ecs_task_definition.task.arn
+  task_definition                    = var.task_definition_arn_override != null ? var.task_definition_arn_override : aws_ecs_task_definition.task[0].arn
   desired_count                      = var.desired_count
   launch_type                        = var.launch_type
   platform_version                   = var.platform_version
@@ -63,5 +64,9 @@ resource "aws_ecs_service" "service" {
     Name        = var.service_name
     Environment = var.environment
     Project     = var.project
+  }
+
+  lifecycle {
+    ignore_changes = [task_definition]
   }
 }

@@ -50,76 +50,71 @@ module "igw" {
 }
 
 
-resource "aws_security_group" "prod_redis" {
+# =============================================================
+# Isolated Security Groups for Production
+# =============================================================
+
+module "prod_redis_sg" {
+  source      = "../../../../modules/security_groups"
+  name        = "redis"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+  name_override = "Prod-Redis-Sg"
   description = "Allows Redis traffic"
-  egress = [{
-    cidr_blocks      = []
-    description      = ""
-    from_port        = 6379
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = ["sg-023679ff04932ed99"]
-    self             = false
-    to_port          = 6379
+
+  ingress_rules = [{
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    cidr_blocks     = []
+    security_groups = [module.prod_be_sg.security_group_id]
+    description     = ""
   }]
-  ingress = [{
-    cidr_blocks      = []
-    description      = ""
-    from_port        = 6379
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = ["sg-023679ff04932ed99"]
-    self             = false
-    to_port          = 6379
+
+  egress_rules = [{
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    cidr_blocks     = []
+    security_groups = [module.prod_be_sg.security_group_id]
+    description     = ""
   }]
-  name                   = "Prod-Redis-Sg"
-  revoke_rules_on_delete = null
-  tags                   = {}
-  tags_all               = {}
-  vpc_id                 = module.vpc.vpc_id
 }
 
-resource "aws_security_group" "prod_alb" {
+module "prod_alb_sg" {
+  source      = "../../../../modules/security_groups"
+  name        = "alb"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+  name_override = "Prod-ALB-SG"
   description = "It allows internet traffic"
-  egress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 0
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "-1"
-    security_groups  = []
-    self             = false
-    to_port          = 0
-  }]
-  ingress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 443
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = []
-    self             = false
-    to_port          = 443
+
+  ingress_rules = [{
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = ""
     }, {
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 80
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = []
-    self             = false
-    to_port          = 80
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = ""
   }]
-  name                   = "Prod-ALB-SG"
-  revoke_rules_on_delete = null
-  tags                   = {}
-  tags_all               = {}
-  vpc_id                 = module.vpc.vpc_id
+
+  egress_rules = [{
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = ""
+  }]
 }
 
 resource "aws_security_group" "default" {
@@ -153,485 +148,270 @@ resource "aws_security_group" "default" {
   vpc_id                 = module.vpc.vpc_id
 }
 
-resource "aws_security_group" "prod_be" {
+module "prod_be_sg" {
+  source      = "../../../../modules/security_groups"
+  name        = "be"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+  name_override = "Prod-BE-SG"
   description = "Allow ALB Traffic"
-  egress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 0
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "-1"
-    security_groups  = []
-    self             = false
-    to_port          = 0
+
+  ingress_rules = [{
+    from_port       = 8000
+    to_port         = 8000
+    protocol        = "tcp"
+    cidr_blocks     = []
+    security_groups = [module.prod_alb_sg.security_group_id]
+    description     = ""
   }]
-  ingress = [{
-    cidr_blocks      = []
-    description      = ""
-    from_port        = 8000
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = ["sg-09fab770ac39d96eb"]
-    self             = false
-    to_port          = 8000
+
+  egress_rules = [{
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = ""
   }]
-  name                   = "Prod-BE-SG"
-  revoke_rules_on_delete = null
-  tags                   = {}
-  tags_all               = {}
-  vpc_id                 = module.vpc.vpc_id
 }
 
-resource "aws_security_group" "worker" {
+module "prod_worker_sg" {
+  source      = "../../../../modules/security_groups"
+  name        = "worker"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+  name_override = "Worker-SG"
   description = "Allow Outbound and Inbound specific"
-  egress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 0
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "-1"
-    security_groups  = []
-    self             = false
-    to_port          = 0
+
+  ingress_rules = []
+
+  egress_rules = [{
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = ""
   }]
-  ingress                = []
-  name                   = "Worker-SG"
-  revoke_rules_on_delete = null
-  tags                   = {}
-  tags_all               = {}
-  vpc_id                 = module.vpc.vpc_id
 }
 
-resource "aws_security_group" "wordpress" {
+module "prod_wordpress_sg" {
+  source      = "../../../../modules/security_groups"
+  name        = "wordpress"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+  name_override = "wordpress-sg"
   description = "launch-wizard-1 created 2026-04-20T18:09:51.774Z"
-  egress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 0
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "-1"
-    security_groups  = []
-    self             = false
-    to_port          = 0
-  }]
-  ingress = [{
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 22
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = []
-    self             = false
-    to_port          = 22
+
+  ingress_rules = [{
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = ""
     }, {
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 443
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = []
-    self             = false
-    to_port          = 443
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = ""
     }, {
-    cidr_blocks      = ["0.0.0.0/0"]
-    description      = ""
-    from_port        = 80
-    ipv6_cidr_blocks = []
-    prefix_list_ids  = []
-    protocol         = "tcp"
-    security_groups  = []
-    self             = false
-    to_port          = 80
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = ""
   }]
-  name                   = "wordpress-sg"
-  revoke_rules_on_delete = null
-  tags                   = {}
-  tags_all               = {}
-  vpc_id                 = module.vpc.vpc_id
+
+  egress_rules = [{
+    from_port       = 0
+    to_port         = 0
+    protocol        = "-1"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = []
+    description     = ""
+  }]
 }
 
 
 # =============================================================
 # Consolidated Databases (DynamoDB & Redis)
 # =============================================================
-# __generated__ by Terraform from "prod-sg"
-resource "aws_elasticache_subnet_group" "prod_redis" {
-  description = " "
-  name        = "prod-sg"
-  subnet_ids  = ["subnet-014c46a812d1d03fe", "subnet-0a27b74e8073476d3"]
-  tags        = {}
-  tags_all    = {}
+
+module "prod_redis" {
+  source                     = "../../../../modules/elasticache"
+  name                       = "redis"
+  engine                     = "redis"
+  node_type                  = "cache.t3.small"
+  num_cache_clusters         = 2
+  transit_encryption         = true
+  at_rest_encryption         = true
+  auth_token                 = null
+  maintenance_window         = "thu:04:00-thu:05:00"
+  snapshot_retention_limit   = 1
+  snapshot_window            = "06:30-07:30"
+  subnet_ids                 = [module.subnets.public_subnet_ids["public2"], module.subnets.private_subnet_ids["private1"]]
+  security_group_ids         = [module.prod_redis_sg.security_group_id]
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "prod-redis"
+  subnet_group_name_override = "prod-sg"
+  apply_immediately          = true
 }
 
-# __generated__ by Terraform
-resource "aws_dynamodb_table" "payment_events_log" {
-  billing_mode                = "PAY_PER_REQUEST"
-  deletion_protection_enabled = false
-  hash_key                    = "event_id"
-  name                        = "production_altrx-payment-events-log"
-  range_key                   = "received_at"
-  read_capacity               = 0
-  restore_date_time           = null
-  restore_source_name         = null
-  restore_source_table_arn    = null
-  restore_to_latest_time      = null
-  stream_enabled              = false
-  table_class                 = "STANDARD"
-  tags                        = {}
-  tags_all                    = {}
-  write_capacity              = 0
-  attribute {
-    name = "event_id"
-    type = "S"
-  }
-  attribute {
-    name = "received_at"
-    type = "S"
-  }
-  ttl {
-    attribute_name = null
-    enabled        = false
-  }
+module "dynamodb_payment_events_log" {
+  source       = "../../../../modules/dynamodb"
+  name         = "production_altrx-payment-events-log"
+  hash_key     = "event_id"
+  range_key    = "received_at"
+  billing_mode = "PAY_PER_REQUEST"
+  environment  = var.environment
+  project      = var.project
+  attributes = [
+    { name = "event_id", type = "S" },
+    { name = "received_at", type = "S" }
+  ]
 }
 
-# __generated__ by Terraform
-resource "aws_elasticache_replication_group" "prod_redis" {
-  at_rest_encryption_enabled  = "true"
-  auth_token                  = null # sensitive
-  auth_token_update_strategy  = null
-  auto_minor_version_upgrade  = "true"
-  automatic_failover_enabled  = false
-  cluster_mode                = "disabled"
-  data_tiering_enabled        = false
-  description                 = " "
-  engine                      = "redis"
-  engine_version              = "7.1"
-  final_snapshot_identifier   = null
-  ip_discovery                = "ipv4"
-  kms_key_id                  = null
-  maintenance_window          = "thu:04:00-thu:05:00"
-  multi_az_enabled            = false
-  network_type                = "ipv4"
-  node_type                   = "cache.t3.small"
-  notification_topic_arn      = null
-  num_cache_clusters          = 2
-  parameter_group_name        = "default.redis7"
-  port                        = 6379
-  preferred_cache_cluster_azs = null
-  replication_group_id        = "prod-redis"
-  security_group_ids          = ["sg-0cd3a8911f4af223b"]
-  security_group_names        = []
-  snapshot_arns               = null
-  snapshot_name               = null
-  snapshot_retention_limit    = 1
-  snapshot_window             = "06:30-07:30"
-  subnet_group_name           = "prod-sg"
-  tags                        = {}
-  tags_all                    = {}
-  transit_encryption_enabled  = true
-  transit_encryption_mode     = "required"
-  user_group_ids              = []
-  log_delivery_configuration {
-    destination      = "redis-prod"
-    destination_type = "cloudwatch-logs"
-    log_format       = "json"
-    log_type         = "slow-log"
-  }
+module "dynamodb_processed_events" {
+  source       = "../../../../modules/dynamodb"
+  name         = "production_altrx-processed-events"
+  hash_key     = "event_id"
+  billing_mode = "PAY_PER_REQUEST"
+  environment  = var.environment
+  project      = var.project
+  attributes = [
+    { name = "event_id", type = "S" }
+  ]
 }
 
-# __generated__ by Terraform
-resource "aws_dynamodb_table" "processed_events" {
-  billing_mode                = "PAY_PER_REQUEST"
-  deletion_protection_enabled = false
-  hash_key                    = "event_id"
-  name                        = "production_altrx-processed-events"
-  range_key                   = null
-  read_capacity               = 0
-  restore_date_time           = null
-  restore_source_name         = null
-  restore_source_table_arn    = null
-  restore_to_latest_time      = null
-  stream_enabled              = false
-  table_class                 = "STANDARD"
-  tags                        = {}
-  tags_all                    = {}
-  write_capacity              = 0
-  attribute {
-    name = "event_id"
-    type = "S"
-  }
-  ttl {
-    attribute_name = null
-    enabled        = false
-  }
+module "dynamodb_stripe_customers" {
+  source       = "../../../../modules/dynamodb"
+  name         = "production_altrx-stripe-customers"
+  hash_key     = "stripe_customer_id"
+  billing_mode = "PAY_PER_REQUEST"
+  environment  = var.environment
+  project      = var.project
+  attributes = [
+    { name = "account", type = "S" },
+    { name = "email", type = "S" },
+    { name = "stripe_customer_id", type = "S" }
+  ]
+  global_secondary_indexes = [
+    {
+      name            = "email-account-index"
+      hash_key        = "email"
+      range_key       = "account"
+      projection_type = "ALL"
+    }
+  ]
 }
 
-# __generated__ by Terraform
-resource "aws_dynamodb_table" "stripe_customers" {
-  billing_mode                = "PAY_PER_REQUEST"
-  deletion_protection_enabled = false
-  hash_key                    = "stripe_customer_id"
-  name                        = "production_altrx-stripe-customers"
-  range_key                   = null
-  read_capacity               = 0
-  restore_date_time           = null
-  restore_source_name         = null
-  restore_source_table_arn    = null
-  restore_to_latest_time      = null
-  stream_enabled              = false
-  table_class                 = "STANDARD"
-  tags                        = {}
-  tags_all                    = {}
-  write_capacity              = 0
-  attribute {
-    name = "account"
-    type = "S"
-  }
-  attribute {
-    name = "email"
-    type = "S"
-  }
-  attribute {
-    name = "stripe_customer_id"
-    type = "S"
-  }
-  global_secondary_index {
-    hash_key           = "email"
-    name               = "email-account-index"
-    non_key_attributes = []
-    projection_type    = "ALL"
-    range_key          = "account"
-    read_capacity      = 0
-    write_capacity     = 0
-  }
-  ttl {
-    attribute_name = null
-    enabled        = false
-  }
-}
-
-# __generated__ by Terraform
-resource "aws_dynamodb_table" "checkout_submissions" {
-  billing_mode                = "PAY_PER_REQUEST"
+module "dynamodb_checkout_submissions" {
+  source       = "../../../../modules/dynamodb"
+  name         = "production_altrx-checkout-submissions"
+  hash_key     = "submission_token"
+  billing_mode = "PAY_PER_REQUEST"
   deletion_protection_enabled = true
-  hash_key                    = "submission_token"
-  name                        = "production_altrx-checkout-submissions"
-  range_key                   = null
-  read_capacity               = 0
-  restore_date_time           = null
-  restore_source_name         = null
-  restore_source_table_arn    = null
-  restore_to_latest_time      = null
-  stream_enabled              = false
-  table_class                 = "STANDARD"
-  tags                        = {}
-  tags_all                    = {}
-  write_capacity              = 0
-  attribute {
-    name = "provider_id"
-    type = "S"
-  }
-  attribute {
-    name = "submission_token"
-    type = "S"
-  }
-  global_secondary_index {
-    hash_key           = "provider_id"
-    name               = "provider_id-index"
-    non_key_attributes = []
-    projection_type    = "ALL"
-    range_key          = null
-    read_capacity      = 0
-    write_capacity     = 0
-  }
-  ttl {
-    attribute_name = null
-    enabled        = false
-  }
+  environment  = var.environment
+  project      = var.project
+  attributes = [
+    { name = "provider_id", type = "S" },
+    { name = "submission_token", type = "S" }
+  ]
+  global_secondary_indexes = [
+    {
+      name            = "provider_id-index"
+      hash_key        = "provider_id"
+      projection_type = "ALL"
+    }
+  ]
 }
 
 
 # =============================================================
 # Consolidated Load Balancing (ALB, Listeners, Target Groups)
 # =============================================================
-# __generated__ by Terraform
-resource "aws_lb_listener" "prod_http" {
-  alpn_policy                          = null
-  certificate_arn                      = null
-  load_balancer_arn                    = "arn:aws:elasticloadbalancing:us-east-1:692137657276:loadbalancer/app/Prod-ALB/ee60104edbc08457"
-  port                                 = 80
-  protocol                             = "HTTP"
-  routing_http_response_server_enabled = true
-  tags                                 = {}
-  tags_all                             = {}
-  default_action {
-    target_group_arn = null
-    type             = "redirect"
-    redirect {
-      host        = "#{host}"
-      path        = "/#{path}"
-      port        = "443"
-      protocol    = "HTTPS"
-      query       = "#{query}"
-      status_code = "HTTP_301"
-    }
-  }
+
+module "prod_target_group" {
+  source               = "../../../../modules/target_group"
+  name                 = "backend"
+  port                 = 8000
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  deregistration_delay = 300
+  health_check_path    = "/healthz"
+  health_check_protocol = "HTTP"
+  health_check_port    = "traffic-port"
+  health_check_interval = 30
+  health_check_timeout = 5
+  healthy_threshold   = 5
+  unhealthy_threshold = 2
+  health_check_matcher = "200"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "Prod-Backend"
 }
 
-# __generated__ by Terraform from "arn:aws:elasticloadbalancing:us-east-1:692137657276:listener/app/Prod-ALB/ee60104edbc08457/800a4e4492f73cf6"
-resource "aws_lb_listener" "prod_https" {
-  alpn_policy                          = null
-  certificate_arn                      = "arn:aws:acm:us-east-1:692137657276:certificate/33647a6f-f1c6-4ae8-aa6e-a58602892404"
-  load_balancer_arn                    = "arn:aws:elasticloadbalancing:us-east-1:692137657276:loadbalancer/app/Prod-ALB/ee60104edbc08457"
-  port                                 = 443
-  protocol                             = "HTTPS"
-  routing_http_response_server_enabled = true
-  ssl_policy                           = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
-  tags                                 = {}
-  tags_all                             = {}
-  default_action {
-    target_group_arn = "arn:aws:elasticloadbalancing:us-east-1:692137657276:targetgroup/Prod-Backend/9047f93ec179e5be"
-    type             = "forward"
-    forward {
-      stickiness {
-        duration = 3600
-        enabled  = false
-      }
-      target_group {
-        arn    = "arn:aws:elasticloadbalancing:us-east-1:692137657276:targetgroup/Prod-Backend/9047f93ec179e5be"
-        weight = 1
-      }
-    }
-  }
-  mutual_authentication {
-    ignore_client_certificate_expiry = false
-    mode                             = "off"
-    trust_store_arn                  = null
-  }
-}
-
-# __generated__ by Terraform
-resource "aws_lb_target_group" "prod_backend" {
-  deregistration_delay               = "300"
-  ip_address_type                    = "ipv4"
-  lambda_multi_value_headers_enabled = null
-  load_balancing_algorithm_type      = "round_robin"
-  load_balancing_anomaly_mitigation  = "off"
-  load_balancing_cross_zone_enabled  = "use_load_balancer_configuration"
-  name                               = "Prod-Backend"
-  port                               = 8000
-  protocol                           = "HTTP"
-  protocol_version                   = "HTTP1"
-  proxy_protocol_v2                  = null
-  slow_start                         = 0
-  tags                               = {}
-  tags_all                           = {}
-  target_type                        = "ip"
-  vpc_id                             = "vpc-06c0d2be8ccc003e3"
-  health_check {
-    enabled             = true
-    healthy_threshold   = 5
-    interval            = 30
-    matcher             = "200"
-    path                = "/healthz"
-    port                = "traffic-port"
-    protocol            = "HTTP"
-    timeout             = 5
-    unhealthy_threshold = 2
-  }
-  stickiness {
-    cookie_duration = 86400
-    cookie_name     = null
-    enabled         = false
-    type            = "lb_cookie"
-  }
-  target_group_health {
-    dns_failover {
-      minimum_healthy_targets_count      = "1"
-      minimum_healthy_targets_percentage = "off"
-    }
-    unhealthy_state_routing {
-      minimum_healthy_targets_count      = 1
-      minimum_healthy_targets_percentage = "off"
-    }
-  }
-}
-
-# __generated__ by Terraform
-resource "aws_lb" "prod_alb" {
-  client_keep_alive                           = 3600
-  customer_owned_ipv4_pool                    = null
-  desync_mitigation_mode                      = "defensive"
-  dns_record_client_routing_policy            = null
-  drop_invalid_header_fields                  = false
-  enable_cross_zone_load_balancing            = true
-  enable_deletion_protection                  = false
-  enable_http2                                = true
-  enable_tls_version_and_cipher_suite_headers = false
-  enable_waf_fail_open                        = false
-  enable_xff_client_port                      = false
-  enable_zonal_shift                          = false
-  idle_timeout                                = 60
-  internal                                    = false
-  ip_address_type                             = "ipv4"
-  load_balancer_type                          = "application"
-  name                                        = "Prod-ALB"
-  preserve_host_header                        = false
-  security_groups                             = ["sg-09fab770ac39d96eb"]
-  subnets                                     = ["subnet-014c46a812d1d03fe", "subnet-02e5dbd52bb57f9d3"]
-  tags                                        = {}
-  tags_all                                    = {}
-  xff_header_processing_mode                  = "append"
-  access_logs {
-    bucket  = ""
-    enabled = false
-    prefix  = null
-  }
-  connection_logs {
-    bucket  = ""
-    enabled = false
-    prefix  = null
-  }
+module "prod_alb" {
+  source               = "../../../../modules/alb"
+  name                 = "alb"
+  internal             = false
+  security_group_ids   = [module.prod_alb_sg.security_group_id]
+  subnet_ids           = [module.subnets.public_subnet_ids["public2"], module.subnets.public_subnet_ids["public1"]]
+  enable_deletion_protection = false
+  idle_timeout         = 60
+  enable_http2         = true
+  http_port            = 80
+  http_default_action  = "redirect_to_https"
+  https_port           = 443
+  certificate_arn      = "arn:aws:acm:us-east-1:692137657276:certificate/33647a6f-f1c6-4ae8-aa6e-a58602892404"
+  https_target_group_arn = module.prod_target_group.target_group_arn
+  ssl_policy           = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "Prod-ALB"
 }
 
 
 # =============================================================
 # Consolidated SQS Queues
 # =============================================================
-# __generated__ by Terraform
-resource "aws_sqs_queue" "production_altrx_payment_events_dlq" {
-  content_based_deduplication       = false
-  delay_seconds                     = 0
-  fifo_queue                        = false
-  kms_data_key_reuse_period_seconds = 300
-  kms_master_key_id                 = null
-  max_message_size = 262144
-  message_retention_seconds         = 1209600
-  name                              = "production_altrx-payment-events-dlq"
-  receive_wait_time_seconds         = 0
-  sqs_managed_sse_enabled           = true
-  tags                              = {}
-  tags_all                          = {}
-  visibility_timeout_seconds        = 30
+
+module "prod_payment_events_dlq" {
+  source                     = "../../../../modules/sqs"
+  name                       = "payment-events-dlq"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "production_altrx-payment-events-dlq"
+  visibility_timeout_seconds = 30
+  message_retention_seconds   = 1209600
+  max_message_size            = 262144
+  delay_seconds               = 0
+  receive_wait_time_seconds   = 0
 }
 
-# __generated__ by Terraform
-resource "aws_sqs_queue" "production_altrx_payment_events" {
-  content_based_deduplication       = false
-  delay_seconds                     = 0
-  fifo_queue                        = false
-  kms_data_key_reuse_period_seconds = 300
-  kms_master_key_id                 = null
-  max_message_size = 262144
-  message_retention_seconds         = 345600
-  name                              = "production_altrx-payment-events"
-  policy = jsonencode({
+module "prod_payment_events" {
+  source                     = "../../../../modules/sqs"
+  name                       = "payment-events"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "production_altrx-payment-events"
+  visibility_timeout_seconds = 30
+  message_retention_seconds   = 345600
+  max_message_size            = 262144
+  delay_seconds               = 0
+  receive_wait_time_seconds   = 0
+  dlq_arn                    = module.prod_payment_events_dlq.queue_arn
+  max_receive_count          = 5
+  policy                     = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -644,28 +424,20 @@ resource "aws_sqs_queue" "production_altrx_payment_events" {
     }]
     Version = "2012-10-17"
   })
-  receive_wait_time_seconds = 0
-  redrive_policy = jsonencode({
-    deadLetterTargetArn = "arn:aws:sqs:us-east-1:692137657276:production_altrx-payment-events-dlq"
-    maxReceiveCount     = 5
-  })
-  sqs_managed_sse_enabled    = true
-  tags                       = {}
-  tags_all                   = {}
-  visibility_timeout_seconds = 30
 }
 
-# __generated__ by Terraform from "https://sqs.us-east-1.amazonaws.com/692137657276/altrx-reconciler-trigger-dlq"
-resource "aws_sqs_queue" "altrx_reconciler_trigger_dlq" {
-  content_based_deduplication       = false
-  delay_seconds                     = 0
-  fifo_queue                        = false
-  kms_data_key_reuse_period_seconds = 300
-  kms_master_key_id                 = null
-  max_message_size                  = 262144
-  message_retention_seconds         = 1209600
-  name                              = "altrx-reconciler-trigger-dlq"
-  policy = jsonencode({
+module "prod_reconciler_trigger_dlq" {
+  source                     = "../../../../modules/sqs"
+  name                       = "reconciler-trigger-dlq"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "altrx-reconciler-trigger-dlq"
+  visibility_timeout_seconds = 30
+  message_retention_seconds   = 1209600
+  max_message_size            = 262144
+  delay_seconds               = 0
+  receive_wait_time_seconds   = 0
+  policy                     = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -678,24 +450,22 @@ resource "aws_sqs_queue" "altrx_reconciler_trigger_dlq" {
     }]
     Version = "2012-10-17"
   })
-  receive_wait_time_seconds  = 0
-  sqs_managed_sse_enabled    = true
-  tags                       = {}
-  tags_all                   = {}
-  visibility_timeout_seconds = 30
 }
 
-# __generated__ by Terraform
-resource "aws_sqs_queue" "altrx_reconciler_trigger" {
-  content_based_deduplication       = false
-  delay_seconds                     = 0
-  fifo_queue                        = false
-  kms_data_key_reuse_period_seconds = 300
-  kms_master_key_id                 = null
-  max_message_size = 262144
-  message_retention_seconds         = 345600
-  name                              = "altrx-reconciler-trigger"
-  policy = jsonencode({
+module "prod_reconciler_trigger" {
+  source                     = "../../../../modules/sqs"
+  name                       = "reconciler-trigger"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "altrx-reconciler-trigger"
+  visibility_timeout_seconds = 660
+  message_retention_seconds   = 345600
+  max_message_size            = 262144
+  delay_seconds               = 0
+  receive_wait_time_seconds   = 0
+  dlq_arn                    = module.prod_reconciler_trigger_dlq.queue_arn
+  max_receive_count          = 5
+  policy                     = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -708,22 +478,13 @@ resource "aws_sqs_queue" "altrx_reconciler_trigger" {
     }]
     Version = "2012-10-17"
   })
-  receive_wait_time_seconds = 0
-  redrive_policy = jsonencode({
-    deadLetterTargetArn = "arn:aws:sqs:us-east-1:692137657276:altrx-reconciler-trigger-dlq"
-    maxReceiveCount     = 5
-  })
-  sqs_managed_sse_enabled    = true
-  tags                       = {}
-  tags_all                   = {}
-  visibility_timeout_seconds = 660
 }
 
 
 # =============================================================
 # Consolidated CloudWatch Logging Groups
 # =============================================================
-# __generated__ by Terraform from "/ecs/prod-worker"
+
 resource "aws_cloudwatch_log_group" "prod_worker" {
   kms_key_id        = null
   log_group_class   = "STANDARD"
@@ -734,7 +495,6 @@ resource "aws_cloudwatch_log_group" "prod_worker" {
   tags_all          = {}
 }
 
-# __generated__ by Terraform from "/aws/lambda/altrx-reconciler"
 resource "aws_cloudwatch_log_group" "reconciler" {
   kms_key_id        = null
   log_group_class   = "STANDARD"
@@ -745,7 +505,6 @@ resource "aws_cloudwatch_log_group" "reconciler" {
   tags_all          = {}
 }
 
-# __generated__ by Terraform from "/aws/amplify/dsx3g35brvnhn"
 resource "aws_cloudwatch_log_group" "amplify" {
   kms_key_id        = null
   log_group_class   = "STANDARD"
@@ -756,7 +515,6 @@ resource "aws_cloudwatch_log_group" "amplify" {
   tags_all          = {}
 }
 
-# __generated__ by Terraform from "redis-prod"
 resource "aws_cloudwatch_log_group" "redis_prod" {
   kms_key_id        = null
   log_group_class   = "STANDARD"
@@ -767,7 +525,6 @@ resource "aws_cloudwatch_log_group" "redis_prod" {
   tags_all          = {}
 }
 
-# __generated__ by Terraform from "/ecs/prod-backend"
 resource "aws_cloudwatch_log_group" "prod_backend" {
   kms_key_id        = null
   log_group_class   = "STANDARD"
@@ -778,7 +535,6 @@ resource "aws_cloudwatch_log_group" "prod_backend" {
   tags_all          = {}
 }
 
-# __generated__ by Terraform from "/aws/ecs/containerinsights/Prod-Altrx/performance"
 resource "aws_cloudwatch_log_group" "ecs_performance" {
   kms_key_id        = null
   log_group_class   = "STANDARD"
@@ -789,7 +545,6 @@ resource "aws_cloudwatch_log_group" "ecs_performance" {
   tags_all          = {}
 }
 
-# __generated__ by Terraform from "/ecs/Prod-Worker-Payment"
 resource "aws_cloudwatch_log_group" "prod_worker_payment" {
   kms_key_id        = null
   log_group_class   = "STANDARD"
@@ -804,7 +559,7 @@ resource "aws_cloudwatch_log_group" "prod_worker_payment" {
 # =============================================================
 # Consolidated IAM Roles & Policies
 # =============================================================
-# __generated__ by Terraform from "arn:aws:iam::692137657276:policy/custom_user_vishal_AI"
+
 resource "aws_iam_policy" "custom_user_vishal_ai_policy" {
   description = null
   name        = "custom_user_vishal_AI"
@@ -892,7 +647,6 @@ resource "aws_iam_policy" "custom_user_vishal_ai_policy" {
   tags_all = {}
 }
 
-# __generated__ by Terraform from "arn:aws:iam::692137657276:policy/service-role/AmplifySSRLoggingPolicy-638507c3-6940-4947-b58d-16f5ca25c35a"
 resource "aws_iam_policy" "amplify_ssr_logging_policy" {
   description = null
   name        = "AmplifySSRLoggingPolicy-638507c3-6940-4947-b58d-16f5ca25c35a"
@@ -920,8 +674,11 @@ resource "aws_iam_policy" "amplify_ssr_logging_policy" {
   tags_all = {}
 }
 
-# __generated__ by Terraform from "ECS-Task-execution-role"
-resource "aws_iam_role" "ecs_task_execution_role" {
+module "iam_ecs_task_execution_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "ECS-Task-execution-role"
+  environment        = var.environment
+  project            = var.project
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRole"
@@ -940,18 +697,16 @@ resource "aws_iam_role" "ecs_task_execution_role" {
     }]
     Version = "2012-10-17"
   })
-  description           = null
-  force_detach_policies = false
-  max_session_duration  = 3600
-  name                  = "ECS-Task-execution-role"
-  path                  = "/"
-  permissions_boundary  = null
-  tags                  = {}
-  tags_all              = {}
+  policy_arns = [
+    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  ]
 }
 
-# __generated__ by Terraform from "altrx_ssm_role"
-resource "aws_iam_role" "altrx_ssm_role" {
+module "iam_altrx_ssm_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "altrx_ssm_role"
+  environment        = var.environment
+  project            = var.project
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRole"
@@ -962,17 +717,11 @@ resource "aws_iam_role" "altrx_ssm_role" {
     }]
     Version = "2012-10-17"
   })
-  description           = "Allows EC2 instances to call AWS services on your behalf."
-  force_detach_policies = false
-  max_session_duration  = 3600
-  name                  = "altrx_ssm_role"
-  path                  = "/"
-  permissions_boundary  = null
-  tags                  = {}
-  tags_all              = {}
+  policy_arns = [
+    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  ]
 }
 
-# __generated__ by Terraform from "arn:aws:iam::692137657276:policy/Custom_S3_Vishal_ai"
 resource "aws_iam_policy" "custom_s3_vishal_ai_policy" {
   description = null
   name        = "Custom_S3_Vishal_ai"
@@ -1029,8 +778,12 @@ resource "aws_iam_policy" "custom_s3_vishal_ai_policy" {
   tags_all = {}
 }
 
-# __generated__ by Terraform from "AmplifySSRLoggingRole-638507c3-6940-4947-b58d-16f5ca25c35a"
-resource "aws_iam_role" "amplify_ssr_logging_role" {
+module "iam_amplify_ssr_logging_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "AmplifySSRLoggingRole-638507c3-6940-4947-b58d-16f5ca25c35a"
+  path               = "/service-role/"
+  environment        = var.environment
+  project            = var.project
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRole"
@@ -1041,17 +794,11 @@ resource "aws_iam_role" "amplify_ssr_logging_role" {
     }]
     Version = "2012-10-17"
   })
-  description           = "The service role that will be used by AWS Amplify for Web Compute app logging."
-  force_detach_policies = false
-  max_session_duration  = 3600
-  name                  = "AmplifySSRLoggingRole-638507c3-6940-4947-b58d-16f5ca25c35a"
-  path                  = "/service-role/"
-  permissions_boundary  = null
-  tags                  = {}
-  tags_all              = {}
+  policy_arns = [
+    aws_iam_policy.amplify_ssr_logging_policy.arn
+  ]
 }
 
-# __generated__ by Terraform from "arn:aws:iam::692137657276:policy/AltrxReconcilerPolicy"
 resource "aws_iam_policy" "altrx_reconciler_policy" {
   description = null
   name        = "AltrxReconcilerPolicy"
@@ -1079,225 +826,165 @@ resource "aws_iam_policy" "altrx_reconciler_policy" {
   tags_all = {}
 }
 
-# __generated__ by Terraform from "AltrxReconcilerLambdaRole"
-resource "aws_iam_role" "altrx_reconciler_lambda_role" {
-  assume_role_policy = jsonencode({
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "lambda.amazonaws.com"
-      }
-    }]
-    Version = "2012-10-17"
-  })
-  description           = "Allows Lambda functions to call AWS services on your behalf."
-  force_detach_policies = false
-  max_session_duration  = 3600
-  name                  = "AltrxReconcilerLambdaRole"
-  path                  = "/"
-  permissions_boundary  = null
-  tags                  = {}
-  tags_all              = {}
-}
-
 
 # =============================================================
 # Consolidated Compute (ECS, Lambda, Amplify, ECR)
 # =============================================================
-# __generated__ by Terraform from "prod-worker"
-resource "aws_ecr_repository" "prod_worker" {
-  force_delete         = null
+
+module "ecr_prod_worker" {
+  source               = "../../../../modules/ecr"
+  name                 = "worker"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "prod-worker"
   image_tag_mutability = "MUTABLE"
-  name                 = "prod-worker"
-  tags                 = {}
-  tags_all             = {}
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-  image_scanning_configuration {
-    scan_on_push = false
-  }
+  scan_on_push         = false
 }
 
-# __generated__ by Terraform from "Prod-Altrx/Prod-Backend"
-resource "aws_ecs_service" "prod_backend" {
-  availability_zone_rebalancing      = "ENABLED"
-  cluster                            = "arn:aws:ecs:us-east-1:692137657276:cluster/Prod-Altrx"
-  deployment_maximum_percent         = 200
-  deployment_minimum_healthy_percent = 100
-  desired_count                      = 1
-  enable_ecs_managed_tags            = true
-  enable_execute_command             = false
-  force_delete                       = null
-  force_new_deployment               = null
-  health_check_grace_period_seconds  = 300
-  iam_role                           = "/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS"
-  name                               = "Prod-Backend"
-  platform_version                   = "1.4.0"
-  propagate_tags                     = "NONE"
-  scheduling_strategy                = "REPLICA"
-  tags                               = {}
-  tags_all                           = {}
-  task_definition                    = "prod-backend:11"
-  triggers                           = {}
-  wait_for_steady_state              = null
-  capacity_provider_strategy {
-    base              = 0
-    capacity_provider = "FARGATE"
-    weight            = 1
-  }
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
-  deployment_controller {
-    type = "ECS"
-  }
-  load_balancer {
-    container_name   = "backend"
-    container_port   = 8000
-    elb_name         = null
-    target_group_arn = "arn:aws:elasticloadbalancing:us-east-1:692137657276:targetgroup/Prod-Backend/9047f93ec179e5be"
-  }
-  network_configuration {
-    assign_public_ip = false
-    security_groups  = ["sg-023679ff04932ed99"]
-    subnets          = ["subnet-03bf80a282f6614ed", "subnet-091fcae8d7ffe9a70"]
-  }
+module "ecs_cluster" {
+  source                    = "../../../../modules/ecs_cluster"
+  cluster_name              = "Prod-Altrx"
+  enable_container_insights = true
+  environment               = var.environment
+  project                   = var.project
 }
 
-# __generated__ by Terraform from "Prod-Altrx"
-resource "aws_ecs_cluster" "production" {
-  name     = "Prod-Altrx"
-  tags     = {}
-  tags_all = {}
-  configuration {
-    execute_command_configuration {
-      kms_key_id = null
-      logging    = "DEFAULT"
+module "ecs_backend_service" {
+  source                       = "../../../../modules/ecs_service"
+  service_name                 = "Prod-Backend"
+  family                       = "prod-backend"
+  cluster_arn                  = module.ecs_cluster.cluster_arn
+  cpu                          = "256"
+  memory                       = "512"
+  execution_role_arn           = module.iam_ecs_task_execution_role.role_arn
+  task_role_arn                = module.iam_ecs_task_execution_role.role_arn
+  desired_count                = 1
+  platform_version             = "1.4.0"
+  launch_type                  = var.ecs_launch_type
+  task_definition_arn_override = "prod-backend:11"
+
+  subnet_ids          = [module.subnets.private_subnet_ids["private3"], module.subnets.private_subnet_ids["private4"]]
+  security_group_ids  = [module.prod_be_sg.security_group_id]
+  assign_public_ip    = false
+
+  container_definitions = jsonencode([{
+    name      = "backend"
+    image     = "public.ecr.aws/ecs-sample-image/amazon-ecs-sample:latest"
+    cpu       = 256
+    memory    = 512
+    essential = true
+    portMappings = [{
+      containerPort = 8000
+      hostPort      = 8000
+    }]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.prod_backend.name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "backend"
+      }
     }
-  }
-  setting {
-    name  = "containerInsights"
-    value = "enhanced"
-  }
+  }])
+
+  target_group_arn = module.prod_target_group.target_group_arn
+  container_name   = "backend"
+  container_port   = 8000
+
+  enable_circuit_breaker = true
+  capacity_providers = [
+    {
+      capacity_provider = "FARGATE"
+      weight            = 1
+      base              = 0
+    }
+  ]
+
+  environment = var.environment
+  project     = var.project
 }
 
-resource "aws_lambda_function" "altrx_reconciler" {
-  architectures                      = ["x86_64"]
-  code_signing_config_arn            = null
-  description                        = null
-  filename                           = null
-  function_name                      = "altrx-reconciler"
-  handler                            = null
-  image_uri                          = "692137657276.dkr.ecr.us-east-1.amazonaws.com/altrx-reconciler:v-26-05-1527"
-  kms_key_arn                        = null
-  layers                             = []
-  memory_size                        = 512
-  package_type                       = "Image"
-  publish                            = null
-  replace_security_groups_on_destroy = null
-  replacement_security_group_ids     = null
-  reserved_concurrent_executions     = -1
-  role                               = "arn:aws:iam::692137657276:role/AltrxReconcilerLambdaRole"
-  runtime                            = null
-  s3_bucket                          = null
-  s3_key                             = null
-  s3_object_version                  = null
-  skip_destroy                       = false
-  tags                               = {}
-  tags_all                           = {}
-  timeout                            = 600
-  environment {
-    variables = var.reconciler_env_vars
-  }
-  ephemeral_storage {
-    size = 512
-  }
-  logging_config {
-    application_log_level = null
-    log_format            = "Text"
-    log_group             = "/aws/lambda/altrx-reconciler"
-    system_log_level      = null
-  }
-  tracing_config {
-    mode = "PassThrough"
-  }
+module "lambda_reconciler" {
+  source                     = "../../../../modules/lambda"
+  function_name              = "reconciler"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "altrx-reconciler"
+  role_name_override         = "AltrxReconcilerLambdaRole"
+  image_uri                  = "692137657276.dkr.ecr.us-east-1.amazonaws.com/altrx-reconciler:v-26-05-1527"
+  memory_size                = 512
+  timeout                    = 600
+  environment_variables      = var.reconciler_env_vars
+  additional_policy_arns     = [aws_iam_policy.altrx_reconciler_policy.arn]
 }
 
-# __generated__ by Terraform from "altrx-reconciler"
-resource "aws_ecr_repository" "reconciler" {
-  force_delete         = null
+module "ecr_reconciler" {
+  source               = "../../../../modules/ecr"
+  name                 = "reconciler"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "altrx-reconciler"
   image_tag_mutability = "MUTABLE"
-  name                 = "altrx-reconciler"
-  tags                 = {}
-  tags_all             = {}
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-  image_scanning_configuration {
-    scan_on_push = true
-  }
+  scan_on_push         = true
 }
 
-# __generated__ by Terraform from "Prod-Altrx/Prod-Worker-Payment"
-resource "aws_ecs_service" "prod_worker_payment" {
-  availability_zone_rebalancing      = "ENABLED"
-  cluster                            = "arn:aws:ecs:us-east-1:692137657276:cluster/Prod-Altrx"
-  deployment_maximum_percent         = 200
-  deployment_minimum_healthy_percent = 100
-  desired_count                      = 2
-  enable_ecs_managed_tags            = true
-  enable_execute_command             = false
-  force_delete                       = null
-  force_new_deployment               = null
-  health_check_grace_period_seconds  = 0
-  iam_role                           = "/aws-service-role/ecs.amazonaws.com/AWSServiceRoleForECS"
-  name                               = "Prod-Worker-Payment"
-  platform_version                   = "LATEST"
-  propagate_tags                     = "NONE"
-  scheduling_strategy                = "REPLICA"
-  tags                               = {}
-  tags_all                           = {}
-  task_definition                    = "Prod-Worker-Payment:4"
-  triggers                           = {}
-  wait_for_steady_state              = null
-  capacity_provider_strategy {
-    base              = 0
-    capacity_provider = "FARGATE"
-    weight            = 1
-  }
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
-  deployment_controller {
-    type = "ECS"
-  }
-  network_configuration {
-    assign_public_ip = true
-    security_groups  = ["sg-043d1765e368b0eb9"]
-    subnets          = ["subnet-03bf80a282f6614ed", "subnet-091fcae8d7ffe9a70"]
-  }
+module "ecs_worker_service" {
+  source                       = "../../../../modules/ecs_service"
+  service_name                 = "Prod-Worker-Payment"
+  family                       = "Prod-Worker-Payment"
+  cluster_arn                  = module.ecs_cluster.cluster_arn
+  cpu                          = "256"
+  memory                       = "512"
+  execution_role_arn           = module.iam_ecs_task_execution_role.role_arn
+  task_role_arn                = module.iam_ecs_task_execution_role.role_arn
+  desired_count                = 2
+  platform_version             = "LATEST"
+  launch_type                  = var.ecs_launch_type
+  task_definition_arn_override = "Prod-Worker-Payment:4"
+
+  subnet_ids          = [module.subnets.private_subnet_ids["private3"], module.subnets.private_subnet_ids["private4"]]
+  security_group_ids  = [module.prod_worker_sg.security_group_id]
+  assign_public_ip    = true
+
+  container_definitions = jsonencode([{
+    name      = "worker-payment"
+    image     = "public.ecr.aws/ecs-sample-image/amazon-ecs-sample:latest"
+    cpu       = 256
+    memory    = 512
+    essential = true
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = aws_cloudwatch_log_group.prod_worker_payment.name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "worker-payment"
+      }
+    }
+  }])
+
+  enable_circuit_breaker = true
+  capacity_providers = [
+    {
+      capacity_provider = "FARGATE"
+      weight            = 1
+      base              = 0
+    }
+  ]
+
+  environment = var.environment
+  project     = var.project
 }
 
-# __generated__ by Terraform from "prod-backend"
-resource "aws_ecr_repository" "prod_backend" {
-  force_delete         = null
+module "ecr_prod_backend" {
+  source               = "../../../../modules/ecr"
+  name                 = "backend"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "prod-backend"
   image_tag_mutability = "MUTABLE"
-  name                 = "prod-backend"
-  tags                 = {}
-  tags_all             = {}
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-  image_scanning_configuration {
-    scan_on_push = false
-  }
+  scan_on_push         = false
 }
 
-# __generated__ by Terraform from "dsx3g35brvnhn"
 resource "aws_amplify_app" "production" {
   access_token                  = null # sensitive
   auto_branch_creation_patterns = []
@@ -1414,4 +1101,3 @@ resource "aws_amplify_app" "production" {
     target    = "/index.html"
   }
 }
-
