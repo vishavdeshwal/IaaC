@@ -58,6 +58,12 @@ variable "reconciler_env_vars" {
   sensitive   = true
 }
 
+variable "amplify_env_vars" {
+  type        = map(string)
+  description = "Environment variables for the Amplify App"
+  sensitive   = true
+}
+
 variable "ecs_launch_type" {
   type        = string
   default     = null
