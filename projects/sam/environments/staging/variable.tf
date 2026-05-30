@@ -57,3 +57,25 @@ variable "master_db_user_pass" {
 variable "health_check_path" {
     type = string
 }
+
+
+variable "secret_gupshup_hmac_secret" {
+  type        = string
+  sensitive   = true
+  description = "The secret Gupshup HMAC credentials key"
+  default     = "dummy-gupshup-hmac-secret"
+}
+
+variable "secret_gupshup_token" {
+  type        = string
+  sensitive   = true
+  description = "The secret Gupshup access token"
+  default     = "dummy-gupshup-token"
+}
+
+variable "secret_clevertap_passcode" {
+  type        = string
+  sensitive   = true
+  description = "The secret Clevertap passcode"
+  default     = "dummy-clevertap-passcode"
+}

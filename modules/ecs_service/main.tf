@@ -66,7 +66,5 @@ resource "aws_ecs_service" "service" {
     Project     = var.project
   }
 
-  lifecycle {
-    ignore_changes = [task_definition]
-  }
+
 }

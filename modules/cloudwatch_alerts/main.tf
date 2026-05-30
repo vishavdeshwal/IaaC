@@ -63,7 +63,8 @@ resource "aws_cloudwatch_metric_alarm" "carevalidate_errors_spike" {
   alarm_name          = "${var.environment}-carevalidate-errors-spike"
   alarm_description   = "CareValidate API errors >= 5 in 5min"
   comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 1
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
   metric_name         = "CareValidateErrors"
   namespace           = "${var.project}/API"
   period              = 300
@@ -83,7 +84,8 @@ resource "aws_cloudwatch_metric_alarm" "carevalidate_5xx" {
   alarm_name          = "${var.environment}-carevalidate-5xx"
   alarm_description   = "CareValidate server-side 5xx errors >= 3 in 5min"
   comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 1
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
   metric_name         = "CareValidate5xx"
   namespace           = "${var.project}/API"
   period              = 300
@@ -103,7 +105,8 @@ resource "aws_cloudwatch_metric_alarm" "paid_no_case_any" {
   alarm_name          = "${var.environment}-paid-no-case-any"
   alarm_description   = "At least one paid-but-no-case silent failure occurred"
   comparison_operator = "GreaterThanOrEqualToThreshold"
-  evaluation_periods  = 1
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
   metric_name         = "PaidButNoCase"
   namespace           = "${var.project}/API"
   period              = 300
@@ -123,7 +126,8 @@ resource "aws_cloudwatch_metric_alarm" "carevalidate_errors_anomaly" {
   alarm_name          = "${var.environment}-carevalidate-errors-anomaly"
   alarm_description   = "CareValidate errors above expected band"
   comparison_operator = "GreaterThanUpperThreshold"
-  evaluation_periods  = 2
+  evaluation_periods  = 3
+  datapoints_to_alarm = 3
   threshold_metric_id = "ad1"
   treat_missing_data  = "notBreaching"
   alarm_actions       = [var.sns_topic_arn]

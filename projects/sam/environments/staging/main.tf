@@ -121,15 +121,15 @@ module "alb_sg" {
 module "app_sg" {
     source = "../../../../modules/security_groups"
 
-    name = "wordpress"
+    name = "app"
     vpc_id = module.vpc.vpc_id
     environment = var.environment
     project = var.project
 
     ingress_rules = [
         {
-            from_port = 8000
-            to_port = 8000
+            from_port = 8080
+            to_port = 8080
             protocol = "tcp"
             description = "Allow traffic from ALB"
 
@@ -197,8 +197,8 @@ module "db-sg" {
 
     ingress_rules = [
         {
-            from_port = 3306
-            to_port = 3306
+            from_port = 5432
+            to_port = 5432
             protocol = "tcp"
             description = "Allow traffic from Application"
 
@@ -240,6 +240,25 @@ module "sqs" {
 
     dlq_arn = module.sqs_dlq.queue_arn
 }
+
+module "sqs_delay" {
+    source = "../../../../modules/sqs"
+    name = "app-delay-queue"
+    environment = var.environment
+    project = var.project
+    delay_seconds = 10
+    visibility_timeout_seconds = 30
+    dlq_arn = module.sqs_delay_dlq.queue_arn
+}
+
+module "sqs_delay_dlq" {
+    source = "../../../../modules/sqs"
+    name = "app-delay-dlq"
+    environment = var.environment
+    project = var.project
+}
+
+
 //--------------------------------------
 
 
@@ -253,8 +272,8 @@ module "aurora" {
     instance_class = "db.serverless"
     num_instances = 1
 
-    engine = "aurora-mysql"
-    engine_version = "8.0.mysql_aurora.3.10.1"
+    engine = "aurora-postgresql"
+    engine_version = "15.14"
     database_name = "stg_app_db"
     master_username = var.master_db_user_name
     master_password = var.master_db_user_pass
@@ -304,8 +323,8 @@ module "redis" {
 
 module "target_group" {
     source = "../../../../modules/target_group"
-    name = "app-tg"
-    port = 8000
+    name = "app-tg-8080"
+    port = 8080
     protocol = "HTTP"
     target_type = "ip"
     vpc_id = module.vpc.vpc_id
@@ -342,8 +361,8 @@ module "alb" {
 module "ecs_fargate" {
     source = "../../../../modules/ecs_fargate"
     cluster_name = "app-sammmm"
-    service_name = "sammmm-backend"
-    task_family = "sammmm-backend-task"
+    service_name = "sammmm-webhook"
+    task_family = "sammmm-webhook-task"
 
     cpu = 256
     memory = 512
@@ -360,20 +379,21 @@ module "ecs_fargate" {
 
     # Bind to to ALB
     target_group_arn = module.target_group.target_group_arn
-    container_name = "sammmm-backend"
-    container_port = 8000
+    container_name = "webhook"
+    container_port = 8080
 
     # Container Specifications
     container_definitions = jsonencode ([
         {
-            name = "sammmm-backend"
-            image = "python:3.11-slim"
-
+            name = "webhook"
+            image = "${module.ecr.repository_url}:latest"
             essential = true
+            command = ["webhook"]
+
             portMappings = [
                 {
-                    containerPort = 8000
-                    hostPort = 8000
+                    containerPort = 8080
+                    hostPort = 8080
                     protocol = "tcp"
                 }
             ]
@@ -385,10 +405,17 @@ module "ecs_fargate" {
                 {name = "REDIS_HOST", value = module.redis.redis_primary_endpoint}
             ]
 
+            secrets = [
+                {name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn},
+                {name = "GUPSHUP_HMAC_SECRET", valueFrom = module.secret_gupshup_hmac_secret.secret_arn},
+                {name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn},
+                {name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn}
+            ]
+
             logConfiguration = {
                 logDriver = "awslogs"
                 options = {
-                    "awslogs-group" = "/ecs/staging-sammmm-backend"
+                    "awslogs-group" = "/ecs/staging-sammmm-webhook"
                     "awslogs-region" = var.aws_region
                     "awslogs-stream-prefix" = "ecs"
                     "awslogs-create-group" = "true"
@@ -408,4 +435,357 @@ module "ecr" {
     image_tag_mutability = "IMMUTABLE"
     scan_on_push = false
 
+}
+
+// =============================================================
+// Secrets Manager Integration (Modularized)
+// =============================================================
+
+module "secret_database_url" {
+  source        = "../../../../modules/secrets_manager"
+  secret_name   = "${var.environment}/${var.project}/DATABASE_URL"
+  secret_string = "postgresql://${var.master_db_user_name}:${var.master_db_user_pass}@${module.aurora.cluster_endpoint}:5432/stg_app_db"
+  environment   = var.environment
+  project       = var.project
+}
+
+
+module "secret_gupshup_hmac_secret" {
+  source        = "../../../../modules/secrets_manager"
+  secret_name   = "${var.environment}/${var.project}/GUPSHUP_HMAC_SECRET"
+  secret_string = var.secret_gupshup_hmac_secret
+  environment   = var.environment
+  project       = var.project
+}
+
+
+module "secret_gupshup_token" {
+  source        = "../../../../modules/secrets_manager"
+  secret_name   = "${var.environment}/${var.project}/GUPSHUP_TOKEN"
+  secret_string = var.secret_gupshup_token
+  environment   = var.environment
+  project       = var.project
+}
+
+module "secret_clevertap_passcode" {
+  source        = "../../../../modules/secrets_manager"
+  secret_name   = "${var.environment}/${var.project}/CLEVERTAP_PASSCODE"
+  secret_string = var.secret_clevertap_passcode
+  environment   = var.environment
+  project       = var.project
+}
+
+
+// =============================================================
+// ECS Task Roles & Policies (Modularized)
+// =============================================================
+
+locals {
+  ecs_task_assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+}
+
+# 1. Webhook Service Task Role & Policy
+resource "aws_iam_policy" "webhook_policy" {
+  name        = "${var.environment}-${var.project}-webhook-policy"
+  description = "Permissions for Sammmm webhook service to access SQS and Secrets Manager"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage", "sqs:GetQueueAttributes"]
+        Resource = [module.sqs.queue_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          module.secret_database_url.secret_arn,
+          module.secret_gupshup_hmac_secret.secret_arn
+        ]
+      }
+    ]
+  })
+}
+
+module "webhook_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "${var.environment}-${var.project}-webhook-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = []
+  environment        = var.environment
+  project            = var.project
+}
+
+resource "aws_iam_role_policy_attachment" "webhook_attachment" {
+  role       = module.webhook_role.role_name
+  policy_arn = aws_iam_policy.webhook_policy.arn
+}
+
+# 2. Ingest Service Task Role & Policy
+resource "aws_iam_policy" "ingest_policy" {
+  name        = "${var.environment}-${var.project}-ingest-policy"
+  description = "Permissions for Sammmm ingest service to process inbound and queue to flush SQS"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:ChangeMessageVisibility"
+        ]
+        Resource = [module.sqs.queue_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage"]
+        Resource = [module.sqs_delay.queue_arn]
+      },
+      {
+        
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          module.secret_database_url.secret_arn
+        ]
+      }
+    ]
+  })
+}
+
+module "ingest_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "${var.environment}-${var.project}-ingest-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = []
+  environment        = var.environment
+  project            = var.project
+}
+
+resource "aws_iam_role_policy_attachment" "ingest_attachment" {
+  role       = module.ingest_role.role_name
+  policy_arn = aws_iam_policy.ingest_policy.arn
+}
+
+# 3. Flush Service Task Role & Policy
+resource "aws_iam_policy" "flush_policy" {
+  name        = "${var.environment}-${var.project}-flush-policy"
+  description = "Permissions for Sammmm flush and migrate service to read flush SQS and Secrets Manager"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:SendMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:ChangeMessageVisibility"
+        ]
+        Resource = [module.sqs_delay.queue_arn]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          module.secret_database_url.secret_arn,
+          module.secret_gupshup_token.secret_arn,
+          module.secret_clevertap_passcode.secret_arn
+        ]
+      }
+    ]
+  })
+}
+
+module "flush_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "${var.environment}-${var.project}-flush-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = []
+  environment        = var.environment
+  project            = var.project
+}
+
+resource "aws_iam_role_policy_attachment" "flush_attachment" {
+  role       = module.flush_role.role_name
+  policy_arn = aws_iam_policy.flush_policy.arn
+}
+
+# 4. ECS Task Execution Role (separate from task role)
+module "ecs_execution_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "${var.environment}-${var.project}-ecs-execution-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = [
+    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  ]
+  environment        = var.environment
+  project            = var.project
+}
+
+# Task Execution Role Secrets Policy (Allows ECS to fetch secrets at startup)
+resource "aws_iam_policy" "ecs_execution_secrets_policy" {
+  name        = "${var.environment}-${var.project}-ecs-execution-secrets"
+  description = "Allows ECS Execution Role to fetch application secrets from Secrets Manager at startup"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = [
+          module.secret_database_url.secret_arn,
+          module.secret_gupshup_hmac_secret.secret_arn,
+          module.secret_gupshup_token.secret_arn,
+          module.secret_clevertap_passcode.secret_arn
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_execution_secrets_attachment" {
+  role       = module.ecs_execution_role.role_name
+  policy_arn = aws_iam_policy.ecs_execution_secrets_policy.arn
+}
+
+# 5. Attach Secrets Access to the internally managed Fargate task execution role
+resource "aws_iam_role_policy_attachment" "fargate_execution_secrets" {
+  role       = "${var.environment}-${var.project}-sammmm-webhook-task-exec-role"
+  policy_arn = aws_iam_policy.ecs_execution_secrets_policy.arn
+}
+
+# 6. Attach Webhook SQS and Secret permissions to the internally managed Fargate task role
+resource "aws_iam_role_policy_attachment" "fargate_task_webhook" {
+  role       = "${var.environment}-${var.project}-sammmm-webhook-task-task-role"
+  policy_arn = aws_iam_policy.webhook_policy.arn
+}
+
+
+// =============================================================
+// Background Worker ECS Services (Ingest & Flush)
+// =============================================================
+
+module "ecs_ingest" {
+  source             = "../../../../modules/ecs_service"
+  service_name       = "sammmm-ingest"
+  family             = "sammmm-ingest-task"
+  cluster_arn        = module.ecs_fargate.cluster_arn
+  cpu                = "256"
+  memory             = "512"
+  execution_role_arn = module.ecs_fargate.execution_role_arn
+  task_role_arn      = module.ingest_role.role_arn
+  desired_count      = 1
+
+  subnet_ids         = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip   = false
+
+  container_definitions = jsonencode([
+    {
+      name      = "ingest"
+      image     = "${module.ecr.repository_url}:latest"
+      essential = true
+      command   = ["ingest"]
+      portMappings = []
+
+      environment = [
+        { name = "ENVIRONMENT", value = var.environment },
+        { name = "SQS_QUEUE_URL", value = module.sqs.queue_url },
+        { name = "DB_HOST", value = module.aurora.cluster_endpoint },
+        { name = "REDIS_HOST", value = module.redis.redis_primary_endpoint }
+      ]
+      secrets = [
+        { name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/staging-SAMMMM-sammmm-ingest"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+
+  environment = var.environment
+  project     = var.project
+}
+
+
+module "ecs_flush" {
+  source             = "../../../../modules/ecs_service"
+  service_name       = "sammmm-flush"
+  family             = "sammmm-flush-task"
+  cluster_arn        = module.ecs_fargate.cluster_arn
+  cpu                = "256"
+  memory             = "512"
+  execution_role_arn = module.ecs_fargate.execution_role_arn
+  task_role_arn      = module.flush_role.role_arn
+  desired_count      = 1
+
+  subnet_ids         = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip   = false
+
+  container_definitions = jsonencode([
+    {
+      name      = "flush"
+      image     = "${module.ecr.repository_url}:latest"
+      essential = true
+      command   = ["flush"]
+      portMappings = []
+
+      environment = [
+        { name = "ENVIRONMENT", value = var.environment },
+        { name = "SQS_QUEUE_URL", value = module.sqs.queue_url },
+        { name = "DB_HOST", value = module.aurora.cluster_endpoint },
+        { name = "REDIS_HOST", value = module.redis.redis_primary_endpoint }
+      ]
+      secrets = [
+        { name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn },
+        { name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn },
+        { name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/staging-SAMMMM-sammmm-flush"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+
+  environment = var.environment
+  project     = var.project
 }
