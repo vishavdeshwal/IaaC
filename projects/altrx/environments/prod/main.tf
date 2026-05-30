@@ -560,93 +560,6 @@ resource "aws_cloudwatch_log_group" "prod_worker_payment" {
 # Consolidated IAM Roles & Policies
 # =============================================================
 
-resource "aws_iam_policy" "custom_user_vishal_ai_policy" {
-  description = null
-  name        = "custom_user_vishal_AI"
-  path        = "/"
-  policy = jsonencode({
-    Statement = [{
-      Action   = ["cloudshell:*", "dynamodb:*", "sqs:*", "sts:GetCallerIdentity", "ec2:Describe*", "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup", "ec2:AuthorizeSecurityGroup*", "ec2:RevokeSecurityGroup*", "ec2:CreateTags", "ecs:*", "application-autoscaling:*", "cloudwatch:*", "logs:DescribeLogGroups", "logs:DescribeLogStreams", "iam:ListRoles", "iam:GetUser", "iam:GetPolicy", "iam:GetPolicyVersion", "ecr:GetAuthorizationToken", "secretsmanager:ListSecrets", "amplify:ListApps", "amplify:GetApp"]
-      Effect   = "Allow"
-      Resource = "*"
-      Sid      = "BaseAndAmplify"
-      }, {
-      Action   = "amplify:*"
-      Effect   = "Allow"
-      Resource = ["arn:aws:amplify:*:692137657276:apps/d1afdsckfq42or", "arn:aws:amplify:*:692137657276:apps/d1afdsckfq42or/*", "arn:aws:amplify:*:692137657276:apps/d9m305ipl0ufl", "arn:aws:amplify:*:692137657276:apps/d9m305ipl0ufl/*", "arn:aws:amplify:*:692137657276:apps/d1onpspxsudhmw", "arn:aws:amplify:*:692137657276:apps/d1onpspxsudhmw/*"]
-      Sid      = "AmplifyApps"
-      }, {
-      Action   = "logs:*"
-      Effect   = "Allow"
-      Resource = ["arn:aws:logs:*:692137657276:log-group:/aws/amplify/*", "arn:aws:logs:*:692137657276:log-group:/aws/amplify/*:*", "arn:aws:logs:*:692137657276:log-group:/aws/ecs/*altrx*", "arn:aws:logs:*:692137657276:log-group:/aws/ecs/*altrx*:*", "arn:aws:logs:*:692137657276:log-group:*altrx*", "arn:aws:logs:*:692137657276:log-group:*altrx*:*"]
-      Sid      = "AmplifyAndAltrxLogs"
-      }, {
-      Action   = "ecr:*"
-      Effect   = "Allow"
-      Resource = ["arn:aws:ecr:*:692137657276:repository/altrx-*", "arn:aws:ecr:*:692137657276:repository/staging_altrx-*", "arn:aws:ecr:*:692137657276:repository/preprod_altrx-*"]
-      Sid      = "ECR"
-      }, {
-      Action   = ["secretsmanager:CreateSecret", "secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret", "secretsmanager:UpdateSecret", "secretsmanager:PutSecretValue", "secretsmanager:DeleteSecret", "secretsmanager:RestoreSecret", "secretsmanager:TagResource", "secretsmanager:UntagResource", "secretsmanager:ListSecretVersionIds", "secretsmanager:GetResourcePolicy"]
-      Effect   = "Allow"
-      Resource = ["arn:aws:secretsmanager:*:692137657276:secret:altrx/*", "arn:aws:secretsmanager:*:692137657276:secret:staging_altrx/*", "arn:aws:secretsmanager:*:692137657276:secret:preprod_altrx/*"]
-      Sid      = "SecretsManagerAltrx"
-      }, {
-      Action   = ["iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:UpdateRole", "iam:UpdateAssumeRolePolicy", "iam:AttachRolePolicy", "iam:DetachRolePolicy", "iam:PutRolePolicy", "iam:DeleteRolePolicy", "iam:GetRolePolicy", "iam:ListAttachedRolePolicies", "iam:ListRolePolicies", "iam:TagRole", "iam:UntagRole"]
-      Effect   = "Allow"
-      Resource = ["arn:aws:iam::692137657276:role/altrx-*", "arn:aws:iam::692137657276:role/staging_altrx-*", "arn:aws:iam::692137657276:role/preprod_altrx-*"]
-      Sid      = "IAMManageAltrxRoles"
-      }, {
-      Action = "iam:PassRole"
-      Condition = {
-        StringEquals = {
-          "iam:PassedToService" = ["ecs-tasks.amazonaws.com", "amplify.amazonaws.com", "application-autoscaling.amazonaws.com"]
-        }
-      }
-      Effect   = "Allow"
-      Resource = ["arn:aws:iam::692137657276:role/altrx-*", "arn:aws:iam::692137657276:role/staging_altrx-*", "arn:aws:iam::692137657276:role/preprod_altrx-*", "arn:aws:iam::692137657276:role/service-role/AmplifySSRLoggingRole-*"]
-      Sid      = "PassRoleScoped"
-      }, {
-      Action = "iam:CreateServiceLinkedRole"
-      Condition = {
-        StringEquals = {
-          "iam:AWSServiceName" = ["ecs.amazonaws.com", "application-autoscaling.amazonaws.com", "ecs.application-autoscaling.amazonaws.com"]
-        }
-      }
-      Effect   = "Allow"
-      Resource = "*"
-      Sid      = "ServiceLinkedRoles"
-      }, {
-      Action   = "ecr:GetAuthorizationToken"
-      Effect   = "Allow"
-      Resource = "*"
-      Sid      = "ECRAuth"
-      }, {
-      Action   = ["ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload", "ecr:PutImage"]
-      Effect   = "Allow"
-      Resource = ["arn:aws:ecr:us-east-1:692137657276:repository/prod-backend", "arn:aws:ecr:us-east-1:692137657276:repository/preprod-backend"]
-      Sid      = "ECRPush"
-      }, {
-      Action   = ["ecs:UpdateService", "ecs:DescribeServices", "ecs:DescribeTaskDefinition", "ecs:RegisterTaskDefinition"]
-      Effect   = "Allow"
-      Resource = "*"
-      Sid      = "ECSDeploy"
-      }, {
-      Action = "iam:PassRole"
-      Condition = {
-        StringLike = {
-          "iam:PassedToService" = "ecs-tasks.amazonaws.com"
-        }
-      }
-      Effect   = "Allow"
-      Resource = "*"
-      Sid      = "ECSPassRole"
-    }]
-    Version = "2012-10-17"
-  })
-  tags     = {}
-  tags_all = {}
-}
-
 resource "aws_iam_policy" "amplify_ssr_logging_policy" {
   description = null
   name        = "AmplifySSRLoggingPolicy-638507c3-6940-4947-b58d-16f5ca25c35a"
@@ -1099,6 +1012,14 @@ resource "aws_s3_bucket_cors_configuration" "uploads_cors" {
     expose_headers  = ["ETag"]
     max_age_seconds = 3000
   }
+}
+
+module "cloudwatch_alerts" {
+  source         = "../../../../modules/cloudwatch_alerts"
+  environment    = var.environment
+  project        = var.project
+  log_group_name = aws_cloudwatch_log_group.amplify.name
+  sns_topic_arn  = var.sns_topic_arn
 }
 
 

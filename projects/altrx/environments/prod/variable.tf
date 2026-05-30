@@ -69,3 +69,8 @@ variable "ecs_launch_type" {
   default     = null
   description = "Launch type for ECS Services (null when using capacity provider strategies)"
 }
+
+variable "sns_topic_arn" {
+  type        = string
+  description = "The ARN of the pre-provisioned SNS topic to send alerts to"
+}
