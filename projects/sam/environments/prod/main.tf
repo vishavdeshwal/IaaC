@@ -206,6 +206,17 @@ module "db-sg" {
             security_groups = [
                 module.app_sg.security_group_id
             ]
+        },
+        {
+            from_port = 5432
+            to_port = 5432
+            protocol = "tcp"
+            description = "Allow traffic from Bastion"
+
+            cidr_blocks = []
+            security_groups = [
+                module.bastion_sg.security_group_id
+            ]
         }
     ]
 
@@ -217,6 +228,34 @@ module "db-sg" {
             description = ""
             cidr_blocks = ["0.0.0.0/0"]
             security_groups = []
+        }
+    ]
+}
+
+module "bastion_sg" {
+    source = "../../../../modules/security_groups"
+    name = "bastion"
+    vpc_id = module.vpc.vpc_id
+    environment = var.environment
+    project = var.project
+
+    ingress_rules = [
+        {
+            from_port = 22
+            to_port = 22
+            protocol = "tcp"
+            description = "Allow SSH traffic"
+            cidr_blocks = ["0.0.0.0/0"]
+        }
+    ]
+
+    egress_rules = [
+        {
+            from_port = 0
+            to_port = 0
+            protocol = "-1"
+            description = "Allow all outbound"
+            cidr_blocks = ["0.0.0.0/0"]
         }
     ]
 }
@@ -834,4 +873,49 @@ module "ecs_flush" {
 
   environment = var.environment
   project     = var.project
+}
+
+// =============================================================
+// Bastion Host Integration (EC2 with SSM & DB Access)
+// =============================================================
+
+data "aws_ssm_parameter" "al2023_ami" {
+  name = "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64"
+}
+
+module "bastion_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "${var.environment}-${var.project}-bastion-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+  policy_arns = [
+    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  ]
+  environment        = var.environment
+  project            = var.project
+}
+
+resource "aws_iam_instance_profile" "bastion_profile" {
+  name = "${var.environment}-${var.project}-bastion-profile"
+  role = module.bastion_role.role_name
+}
+
+module "bastion_host" {
+  source               = "../../../../modules/ec2"
+  name                 = "bastion"
+  ami_id               = data.aws_ssm_parameter.al2023_ami.value
+  instance_type        = "t3.micro"
+  subnet_id            = module.subnets.public_subnet_ids["public-1"]
+  security_group_ids   = [module.bastion_sg.security_group_id]
+  associate_public_ip  = true
+  iam_instance_profile = aws_iam_instance_profile.bastion_profile.name
+  key_name             = var.bastion_key_name
+  environment          = var.environment
+  project              = var.project
 }

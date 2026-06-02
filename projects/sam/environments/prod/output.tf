@@ -67,3 +67,13 @@ output "ecs_execution_role_arn" {
   value       = module.ecs_execution_role.role_arn
   description = "ARN of the ECS Fargate execution IAM role"
 }
+
+output "bastion_public_ip" {
+  value       = module.bastion_host.public_ip
+  description = "Public IP of the EC2 bastion instance"
+}
+
+output "bastion_instance_id" {
+  value       = module.bastion_host.instance_id
+  description = "Instance ID of the EC2 bastion instance"
+}

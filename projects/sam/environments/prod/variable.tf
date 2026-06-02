@@ -83,3 +83,9 @@ variable "secret_clevertap_passcode" {
   description = "The secret Clevertap passcode"
   default     = "dummy-clevertap-passcode"
 }
+
+variable "bastion_key_name" {
+  type        = string
+  default     = null
+  description = "The SSH key pair name for the EC2 bastion instance"
+}
