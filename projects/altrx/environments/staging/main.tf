@@ -594,24 +594,28 @@ module "staging_worker_payment_log_group" {
 # =============================================================
 # Consolidated IAM Roles & Policies (Fully Isolated Suffixes)
 # =============================================================
-resource "aws_iam_policy" "ecs_s3_env_policy" {
+data "aws_iam_policy_document" "ecs_s3_env_policy_doc" {
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = [
+      "${aws_s3_bucket.uploads.arn}/worker-env/worker.env",
+      "${aws_s3_bucket.uploads.arn}/backend-env/backend.env"
+    ]
+  }
+  statement {
+    actions   = ["s3:GetBucketLocation"]
+    resources = [aws_s3_bucket.uploads.arn]
+  }
+}
+
+module "iam_ecs_s3_env_policy" {
+  source      = "../../../../modules/iam_policy"
   name        = "${var.environment}-ecs-s3-env-policy"
-  path        = "/"
-  policy = jsonencode({
-    Statement = [{
-      Action   = ["s3:GetObject"]
-      Effect   = "Allow"
-      Resource = [
-        "arn:aws:s3:::${var.environment}-${lower(var.project)}-v3-uploads/worker-env/worker.env",
-        "arn:aws:s3:::${var.environment}-${lower(var.project)}-v3-uploads/backend-env/backend.env"
-      ]
-      }, {
-      Action   = ["s3:GetBucketLocation"]
-      Effect   = "Allow"
-      Resource = "arn:aws:s3:::${var.environment}-${lower(var.project)}-v3-uploads"
-    }]
-    Version = "2012-10-17"
-  })
+  role_name   = module.iam_ecs_task_execution_role.role_name
+  is_inline   = false
+  policy      = data.aws_iam_policy_document.ecs_s3_env_policy_doc.json
+  environment = var.environment
+  project     = var.project
 }
 
 module "iam_ecs_task_execution_role" {
@@ -642,11 +646,6 @@ module "iam_ecs_task_execution_role" {
   ]
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_s3_env_attachment" {
-  role       = module.iam_ecs_task_execution_role.role_name
-  policy_arn = aws_iam_policy.ecs_s3_env_policy.arn
-}
-
 module "iam_altrx_ssm_role" {
   source      = "../../../../modules/iam_role"
   name        = "altrx_ssm_role_staging"
@@ -669,31 +668,146 @@ module "iam_altrx_ssm_role" {
 
 
 
-resource "aws_iam_policy" "altrx_reconciler_policy" {
-  name = "AltrxReconcilerPolicy-staging"
-  path = "/"
-  policy = jsonencode({
-    Statement = [{
-      Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:DescribeTable"]
-      Effect   = "Allow"
-      Resource = ["arn:aws:dynamodb:us-east-1:692137657276:table/staging_altrx-checkout-submissions", "arn:aws:dynamodb:us-east-1:692137657276:table/staging_altrx-checkout-submissions/index/*", "arn:aws:dynamodb:us-east-1:692137657276:table/staging_altrx-stripe-customers", "arn:aws:dynamodb:us-east-1:692137657276:table/staging_altrx-stripe-customers/index/*", "arn:aws:dynamodb:us-east-1:692137657276:table/staging_altrx-processed-events", "arn:aws:dynamodb:us-east-1:692137657276:table/staging_altrx-payment-events-log", "arn:aws:dynamodb:us-east-1:692137657276:table/staging_altrx-payment-events-log/index/*"]
-      Sid      = "DynamoDBAccess"
-      }, {
-      Action   = ["sqs:SendMessage"]
-      Effect   = "Allow"
-      Resource = module.reconciler_trigger.queue_arn
-      Sid      = "SQSSelfChain"
-      }, {
-      Action   = ["secretsmanager:GetSecretValue"]
-      Effect   = "Allow"
-      Resource = "arn:aws:secretsmanager:us-east-1:692137657276:secret:staging_altrx/*"
-      Sid      = "SecretsManagerAccess"
-    }]
-    Version = "2012-10-17"
-  })
+data "aws_iam_policy_document" "altrx_reconciler_policy_doc" {
+  statement {
+    sid     = "DynamoDBAccess"
+    actions = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:DescribeTable"]
+    resources = [
+      module.dynamodb_checkout_submissions.table_arn,
+      "${module.dynamodb_checkout_submissions.table_arn}/index/*",
+      module.dynamodb_stripe_customers.table_arn,
+      "${module.dynamodb_stripe_customers.table_arn}/index/*",
+      module.dynamodb_processed_events.table_arn,
+      module.dynamodb_payment_events_log.table_arn,
+      "${module.dynamodb_payment_events_log.table_arn}/index/*"
+    ]
+  }
+  statement {
+    sid       = "SQSSelfChain"
+    actions   = ["sqs:SendMessage"]
+    resources = [module.reconciler_trigger.queue_arn]
+  }
+  statement {
+    sid       = "SecretsManagerAccess"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["arn:aws:secretsmanager:us-east-1:692137657276:secret:staging_altrx/*"]
+  }
+}
+
+module "iam_altrx_reconciler_policy" {
+  source      = "../../../../modules/iam_policy"
+  name        = "AltrxReconcilerPolicy-staging"
+  is_inline   = false
+  policy      = data.aws_iam_policy_document.altrx_reconciler_policy_doc.json
+  environment = var.environment
+  project     = var.project
 }
 
 # Policy attachments are managed directly inside the module.iam_role blocks.
+
+# -------
+# Manually Created Staging Worker IAM Roles & Policies (Imported to sync state)
+# -------
+
+module "iam_worker_execution_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "staging_altrx-payment-worker-execution-role"
+  description        = "Execution role for v3 payment worker (ECR pull + secret valueFrom)"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+  environment = var.environment
+  project     = var.project
+}
+
+data "aws_iam_policy_document" "worker_execution_policy_doc" {
+  statement {
+    actions   = ["ecr:GetAuthorizationToken", "ecr:BatchCheckLayerAvailability", "ecr:GetDownloadUrlForLayer", "ecr:BatchGetImage"]
+    resources = ["*"]
+  }
+  statement {
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:CreateLogGroup"]
+    resources = ["arn:aws:logs:us-east-1:692137657276:log-group:/aws/ecs/staging_altrx-payment-worker:*"]
+  }
+  statement {
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["arn:aws:secretsmanager:us-east-1:692137657276:secret:staging_altrx/v3/*"]
+  }
+  statement {
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.uploads.arn}/worker-env/worker.env"]
+  }
+}
+
+module "iam_worker_execution_inline" {
+  source      = "../../../../modules/iam_policy"
+  name        = "worker-execution-inline"
+  role_name   = module.iam_worker_execution_role.role_id
+  is_inline   = true
+  policy      = data.aws_iam_policy_document.worker_execution_policy_doc.json
+  environment = var.environment
+  project     = var.project
+}
+
+module "iam_worker_task_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "staging_altrx-payment-worker-task-role"
+  description        = "Task role for v3 payment worker (DDB+SQS+Secrets+Logs)"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ecs-tasks.amazonaws.com" }
+    }]
+  })
+  environment = var.environment
+  project     = var.project
+}
+
+data "aws_iam_policy_document" "worker_task_policy_doc" {
+  statement {
+    actions = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:DeleteItem", "dynamodb:Query", "dynamodb:ConditionCheckItem", "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem"]
+    resources = [
+      module.dynamodb_checkout_submissions.table_arn,
+      "${module.dynamodb_checkout_submissions.table_arn}/index/*",
+      module.dynamodb_payment_events_log.table_arn,
+      module.dynamodb_stripe_customers.table_arn,
+      module.dynamodb_processed_events.table_arn,
+      "${module.dynamodb_stripe_customers.table_arn}/index/*"
+    ]
+  }
+  statement {
+    actions = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:GetQueueUrl", "sqs:SendMessage", "sqs:ChangeMessageVisibility"]
+    resources = [
+      module.staging_payment_events.queue_arn,
+      module.staging_payment_events_dlq.queue_arn
+    ]
+  }
+  statement {
+    actions   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+    resources = ["arn:aws:secretsmanager:us-east-1:692137657276:secret:staging_altrx/v3/*"]
+  }
+  statement {
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = ["arn:aws:logs:us-east-1:692137657276:log-group:/aws/ecs/staging_altrx-payment-worker:*"]
+  }
+}
+
+module "iam_worker_task_inline" {
+  source      = "../../../../modules/iam_policy"
+  name        = "worker-task-inline"
+  role_name   = module.iam_worker_task_role.role_id
+  is_inline   = true
+  policy      = data.aws_iam_policy_document.worker_task_policy_doc.json
+  environment = var.environment
+  project     = var.project
+}
 
 # =============================================================
 
@@ -729,6 +843,7 @@ module "ecs_backend_service" {
   desired_count      = 1
   platform_version   = "1.4.0"
   launch_type        = var.ecs_launch_type
+  task_definition_arn_override = "arn:aws:ecs:us-east-1:692137657276:task-definition/staging-backend:6"
 
   subnet_ids         = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
   security_group_ids = [module.staging_be_sg.security_group_id]
@@ -786,7 +901,7 @@ module "lambda_reconciler" {
   memory_size            = 512
   timeout                = 600
   environment_variables  = var.reconciler_env_vars
-  additional_policy_arns = [aws_iam_policy.altrx_reconciler_policy.arn]
+  additional_policy_arns = [module.iam_altrx_reconciler_policy.policy_arn]
 }
 
 module "ecr_reconciler" {
@@ -802,15 +917,16 @@ module "ecr_reconciler" {
 module "ecs_worker_service" {
   source             = "../../../../modules/ecs_service"
   service_name       = "Staging-Worker-Payment"
-  family             = "Staging-Worker-Payment"
+  family             = "staging_altrx-payment-worker"
   cluster_arn        = module.ecs_cluster.cluster_arn
   cpu                = "256"
   memory             = "512"
-  execution_role_arn = module.iam_ecs_task_execution_role.role_arn
-  task_role_arn      = module.iam_ecs_task_execution_role.role_arn
+  execution_role_arn = module.iam_worker_execution_role.role_arn
+  task_role_arn      = module.iam_worker_task_role.role_arn
   desired_count      = 1
   platform_version   = "LATEST"
   launch_type        = var.ecs_launch_type
+  task_definition_arn_override = "arn:aws:ecs:us-east-1:692137657276:task-definition/staging_altrx-payment-worker:6"
 
   subnet_ids         = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
   security_group_ids = [module.staging_worker_sg.security_group_id]

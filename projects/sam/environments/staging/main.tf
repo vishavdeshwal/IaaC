@@ -398,19 +398,8 @@ module "ecs_fargate" {
                 }
             ]
 
-            environment = [
-                {name = "ENVIRONMENT", value = var.environment},
-                {name = "SQS_QUEUE_URL", value = module.sqs.queue_url},
-                {name = "DB_HOST", value = module.aurora.cluster_endpoint},
-                {name = "REDIS_HOST", value = module.redis.redis_primary_endpoint}
-            ]
-
-            secrets = [
-                {name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn},
-                {name = "GUPSHUP_HMAC_SECRET", valueFrom = module.secret_gupshup_hmac_secret.secret_arn},
-                {name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn},
-                {name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn}
-            ]
+            environment = local.sam_env_vars
+            secrets     = local.sam_secrets
 
             logConfiguration = {
                 logDriver = "awslogs"
@@ -493,6 +482,66 @@ locals {
       }
     ]
   })
+
+  sam_env_vars = [
+    { name = "APP_NAME", value = "sammmm" },
+    { name = "APP_ENV", value = var.environment },
+    { name = "LOG_LEVEL", value = "info" },
+    { name = "LOG_PRETTY", value = "false" },
+    { name = "SERVER_HOST", value = "0.0.0.0" },
+    { name = "SERVER_PORT", value = "8080" },
+    { name = "DB_MAX_CONNS", value = "10" },
+    { name = "DB_MAX_CONN_LIFETIME", value = "1h" },
+    { name = "REDIS_ADDRS", value = "${module.redis.redis_primary_endpoint}:6379" },
+    { name = "REDIS_PASSWORD", value = "" },
+    { name = "AWS_REGION", value = var.aws_region },
+    { name = "AWS_ENDPOINT_URL", value = "" },
+    { name = "SQS_INBOUND_URL", value = module.sqs.queue_url },
+    { name = "SQS_FLUSH_URL", value = module.sqs_delay.queue_url },
+    { name = "INGEST_SEEN_TTL", value = "24h" },
+    { name = "INGEST_SCHEDULE_TTL", value = "30s" },
+    { name = "BATCH_WINDOW", value = "3s" },
+    { name = "INGEST_MAX_MESSAGES", value = "10" },
+    { name = "INGEST_WAIT_SECONDS", value = "5" },
+    { name = "INGEST_PENDING_CAP", value = "100" },
+    { name = "FLUSH_LOCK_TTL", value = "30s" },
+    { name = "FLUSH_CEILING", value = "180s" },
+    { name = "FLUSH_HEARTBEAT_INTERVAL", value = "10s" },
+    { name = "FLUSH_MAX_MESSAGES", value = "10" },
+    { name = "FLUSH_WAIT_SECONDS", value = "5" },
+    { name = "FLUSH_COMPLETED_TTL", value = "1h" },
+    { name = "GUPSHUP_DISABLED", value = "true" },
+    { name = "GUPSHUP_ENDPOINT", value = "" },
+    { name = "GUPSHUP_TEMPLATE_ENDPOINT", value = "" },
+    { name = "GUPSHUP_SOURCE", value = "" },
+    { name = "GUPSHUP_IDEMPOTENCY_FIELD", value = "messageId" },
+    { name = "DISPATCH_WINDOW", value = "24h" },
+    { name = "DISPATCH_TEMPLATE_NAME", value = "sammmm_session_reactivation" },
+    { name = "CLEVERTAP_DISABLED", value = "true" },
+    { name = "CLEVERTAP_ENDPOINT", value = "https://api.clevertap.com/1/upload.json" },
+    { name = "CLEVERTAP_ACCOUNT_ID", value = "" },
+    { name = "CLEVERTAP_EVENT_NAME", value = "co_creation_completed" },
+    { name = "COST_DAILY_LIMIT", value = "25000" },
+    { name = "COST_TICK_INTERVAL", value = "60s" },
+    { name = "HEALTH_PORT", value = "9091" },
+    { name = "HEALTH_SHUTDOWN_TIMEOUT", value = "5s" },
+    { name = "HEALTH_PROBE_TIMEOUT", value = "2s" },
+    { name = "GOOGLE_API_KEY", value = "AIzaSyC4iRJb0-RBcvk3qNusRrvQd5BKXNyXMuE" },
+    { name = "GEMINI_MODEL", value = "gemini-2.5-flash" },
+    { name = "OPENAI_API_KEY", value = "" },
+    { name = "LLM_FALLBACK_MODEL", value = "gpt-5-nano" },
+    { name = "LLM_DEFAULT_CREATOR", value = "heli" },
+    { name = "LLM_DEFAULT_PRODUCT", value = "cheek_tint_ph" },
+    { name = "LLM_TIMEOUT_SECONDS", value = "50" },
+    { name = "SELECTIVE_REASK_ENABLED", value = "false" }
+  ]
+
+  sam_secrets = [
+    { name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn },
+    { name = "GUPSHUP_HMAC_SECRET", valueFrom = module.secret_gupshup_hmac_secret.secret_arn },
+    { name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn },
+    { name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn }
+  ]
 }
 
 # 1. Webhook Service Task Role & Policy
@@ -638,10 +687,10 @@ module "ecs_execution_role" {
   project            = var.project
 }
 
-# Task Execution Role Secrets Policy (Allows ECS to fetch secrets at startup)
+# Task Execution Role Secrets Policy (Allows ECS to fetch secrets at startup and write/create log groups)
 resource "aws_iam_policy" "ecs_execution_secrets_policy" {
   name        = "${var.environment}-${var.project}-ecs-execution-secrets"
-  description = "Allows ECS Execution Role to fetch application secrets from Secrets Manager at startup"
+  description = "Allows ECS Execution Role to fetch application secrets from Secrets Manager at startup and manage log groups"
   policy      = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -654,6 +703,15 @@ resource "aws_iam_policy" "ecs_execution_secrets_policy" {
           module.secret_gupshup_token.secret_arn,
           module.secret_clevertap_passcode.secret_arn
         ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:515966492403:log-group:*"
       }
     ]
   })
@@ -683,14 +741,15 @@ resource "aws_iam_role_policy_attachment" "fargate_task_webhook" {
 
 module "ecs_ingest" {
   source             = "../../../../modules/ecs_service"
-  service_name       = "sammmm-ingest"
-  family             = "sammmm-ingest-task"
+  service_name       = "${var.environment}-${var.project}-sammmm-ingest"
+  family             = "${var.environment}-${var.project}-sammmm-ingest-task"
   cluster_arn        = module.ecs_fargate.cluster_arn
   cpu                = "256"
   memory             = "512"
-  execution_role_arn = module.ecs_fargate.execution_role_arn
+  execution_role_arn = module.ecs_execution_role.role_arn
   task_role_arn      = module.ingest_role.role_arn
   desired_count      = 1
+  launch_type        = "FARGATE"
 
   subnet_ids         = [
     module.subnets.private_subnet_ids["app-1"],
@@ -709,15 +768,8 @@ module "ecs_ingest" {
       command   = ["ingest"]
       portMappings = []
 
-      environment = [
-        { name = "ENVIRONMENT", value = var.environment },
-        { name = "SQS_QUEUE_URL", value = module.sqs.queue_url },
-        { name = "DB_HOST", value = module.aurora.cluster_endpoint },
-        { name = "REDIS_HOST", value = module.redis.redis_primary_endpoint }
-      ]
-      secrets = [
-        { name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn }
-      ]
+      environment = local.sam_env_vars
+      secrets     = local.sam_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -737,14 +789,15 @@ module "ecs_ingest" {
 
 module "ecs_flush" {
   source             = "../../../../modules/ecs_service"
-  service_name       = "sammmm-flush"
-  family             = "sammmm-flush-task"
+  service_name       = "${var.environment}-${var.project}-sammmm-flush"
+  family             = "${var.environment}-${var.project}-sammmm-flush-task"
   cluster_arn        = module.ecs_fargate.cluster_arn
   cpu                = "256"
   memory             = "512"
-  execution_role_arn = module.ecs_fargate.execution_role_arn
+  execution_role_arn = module.ecs_execution_role.role_arn
   task_role_arn      = module.flush_role.role_arn
   desired_count      = 1
+  launch_type        = "FARGATE"
 
   subnet_ids         = [
     module.subnets.private_subnet_ids["app-1"],
@@ -763,17 +816,8 @@ module "ecs_flush" {
       command   = ["flush"]
       portMappings = []
 
-      environment = [
-        { name = "ENVIRONMENT", value = var.environment },
-        { name = "SQS_QUEUE_URL", value = module.sqs.queue_url },
-        { name = "DB_HOST", value = module.aurora.cluster_endpoint },
-        { name = "REDIS_HOST", value = module.redis.redis_primary_endpoint }
-      ]
-      secrets = [
-        { name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn },
-        { name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn },
-        { name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn }
-      ]
+      environment = local.sam_env_vars
+      secrets     = local.sam_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
