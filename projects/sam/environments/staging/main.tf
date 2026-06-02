@@ -348,6 +348,11 @@ module "alb" {
         module.subnets.public_subnet_ids["public-2"]
     ]
 
+    http_port = 443
+    http_protocol = "HTTPS"
+    http_certificate_arn = "arn:aws:acm:ap-south-1:515966492403:certificate/390cbef8-cfb1-4a5a-81aa-f2a463724290"
+    ssl_policy = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+
     http_default_action = "forward"
     http_target_group_arn = module.target_group.target_group_arn
     environment = var.environment

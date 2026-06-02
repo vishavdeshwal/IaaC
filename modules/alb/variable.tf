@@ -45,6 +45,18 @@ variable "http_port" {
     description = "Port for the HTTP listener"
 }
 
+variable "http_protocol" {
+    type        = string
+    default     = "HTTP"
+    description = "Protocol for the HTTP listener ('HTTP' or 'HTTPS')"
+}
+
+variable "http_certificate_arn" {
+    type        = string
+    default     = null
+    description = "ACM certificate ARN for the HTTP listener if protocol is HTTPS"
+}
+
 variable "http_default_action" {
     type        = string
     default     = "redirect_to_https"

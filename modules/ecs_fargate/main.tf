@@ -121,7 +121,7 @@ resource "aws_ecs_service" "fargate" {
 
     # Ignore task definition changes during deployments (common CI/CD pattern)
     lifecycle {
-        ignore_changes = [desired_count]
+        ignore_changes = [desired_count, task_definition]
     }
 
     tags = {

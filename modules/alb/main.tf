@@ -38,7 +38,9 @@ resource "aws_lb" "alb" {
 resource "aws_lb_listener" "http" {
     load_balancer_arn = aws_lb.alb.arn
     port              = var.http_port
-    protocol          = "HTTP"
+    protocol          = var.http_protocol
+    certificate_arn   = var.http_certificate_arn
+    ssl_policy        = var.http_protocol == "HTTPS" ? var.ssl_policy : null
 
     dynamic "default_action" {
         for_each = var.http_default_action == "redirect_to_https" ? [1] : []
