@@ -53,3 +53,28 @@ output "bastion_instance_id" {
   description = "The Instance ID of the Bastion (used for SSM tunneling)"
 }
 
+output "strapie_uploads_bucket_name" {
+  value       = aws_s3_bucket.strapie_uploads.id
+  description = "Name of the new S3 bucket for strapie uploads"
+}
+
+output "strapie_uploads_bucket_arn" {
+  value       = aws_s3_bucket.strapie_uploads.arn
+  description = "ARN of the new S3 bucket for strapie uploads"
+}
+
+output "strapie_postgres_endpoint" {
+  value       = aws_db_instance.strapie_db.endpoint
+  description = "Connection endpoint of the imported Postgres RDS instance"
+}
+
+output "strapie_postgres_identifier" {
+  value       = aws_db_instance.strapie_db.identifier
+  description = "Identifier of the imported Postgres RDS instance"
+}
+
+output "strapie_server_role_arn" {
+  value       = module.iam_strapie_server_role.role_arn
+  description = "ARN of the imported SSM IAM role for the EC2 server"
+}
+

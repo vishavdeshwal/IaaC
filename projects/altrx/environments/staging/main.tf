@@ -1004,4 +1004,191 @@ resource "aws_s3_bucket_cors_configuration" "uploads_cors" {
   }
 }
 
+# =============================================================
+# strapie Infrastructure (Imported modularly from AWS)
+# =============================================================
+
+# 1. EC2 Security Group (Using modules/security_groups)
+module "sg_strapie" {
+  source        = "../../../../modules/security_groups"
+  vpc_id        = module.vpc.vpc_id
+  name          = "strapie"
+  name_override = "strapie-sg"
+  description   = "It allows all traffic to strapie"
+  environment   = var.environment
+  project       = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 0
+      to_port         = 65535
+      protocol        = "tcp"
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+      description     = "Allow all TCP"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port       = 0
+      to_port         = 0
+      protocol        = "-1"
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+      description     = "Allow all outbound"
+    }
+  ]
+}
+
+# 2. Database Security Group (Using modules/security_groups)
+module "sg_strapie_db" {
+  source        = "../../../../modules/security_groups"
+  vpc_id        = module.vpc.vpc_id
+  name          = "strapie-db"
+  name_override = "strapie-db-sg"
+  description   = "it allows traffic from strapie-sg"
+  environment   = var.environment
+  project       = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      cidr_blocks     = []
+      security_groups = [module.sg_strapie.security_group_id]
+      description     = "Postgres inbound from EC2"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port       = 0
+      to_port         = 0
+      protocol        = "-1"
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+      description     = "Allow all outbound"
+    }
+  ]
+}
+
+# 3. DB Subnet Group (Native to match AWS name exactly)
+resource "aws_db_subnet_group" "strapie_db_subnet_group" {
+  name        = "strapie-postgres-subnet-group"
+  description = "It will place strapie db"
+  subnet_ids  = [
+    module.subnets.private_subnet_ids["private1"],
+    module.subnets.private_subnet_ids["private4"]
+  ]
+
+  tags = {
+    Name        = "strapie-postgres-subnet-group"
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+# 4. Postgres DB Instance (Native to match AWS name exactly)
+resource "aws_db_instance" "strapie_db" {
+  identifier                  = "strapie-postgres-db"
+  allocated_storage           = 100
+  max_allocated_storage       = 1000
+  storage_type                = "gp3"
+  engine                      = "postgres"
+  engine_version              = "18.3"
+  instance_class              = "db.m7g.large"
+  username                    = "postgres"
+  password                    = "StagingSecurePass123!" # Terraform ignores password updates on import
+
+  db_subnet_group_name        = aws_db_subnet_group.strapie_db_subnet_group.name
+  vpc_security_group_ids      = [module.sg_strapie_db.security_group_id]
+  multi_az                    = true
+  publicly_accessible         = false
+  storage_encrypted           = true
+  kms_key_id                  = "arn:aws:kms:us-east-1:692137657276:key/4a92e403-aaf9-4374-bf51-0871ed6b4acd"
+  backup_retention_period     = 7
+  backup_window               = "07:13-07:43"
+  maintenance_window          = "wed:09:57-wed:10:27"
+
+  performance_insights_enabled          = true
+  performance_insights_kms_key_id       = "arn:aws:kms:us-east-1:692137657276:key/4a92e403-aaf9-4374-bf51-0871ed6b4acd"
+  performance_insights_retention_period = 7
+
+  skip_final_snapshot         = true
+
+  lifecycle {
+    ignore_changes = [
+      password
+    ]
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+# 5. EC2 Server IAM Role (Using modules/iam_role)
+module "iam_strapie_server_role" {
+  source             = "../../../../modules/iam_role"
+  name               = "altrx_ssm_role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect    = "Allow"
+        Principal = { Service = "ec2.amazonaws.com" }
+        Action    = "sts:AssumeRole"
+      }
+    ]
+  })
+  policy_arns = [
+    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  ]
+  environment = var.environment
+  project     = var.project
+}
+
+# 6. S3 Bucket for strapie Uploads
+resource "aws_s3_bucket" "strapie_uploads" {
+  bucket = "${var.environment}-${lower(var.project)}-strapie-uploads"
+
+  tags = {
+    Name        = "${var.environment}-${lower(var.project)}-strapie-uploads"
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+# 7. IAM Policy to grant access to the new S3 bucket
+resource "aws_iam_policy" "strapie_s3_policy" {
+  name        = "${var.environment}-${var.project}-strapie-s3-access"
+  description = "Allows Staging Strapie Server to access its dedicated S3 bucket"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.strapie_uploads.arn,
+          "${aws_s3_bucket.strapie_uploads.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "strapie_server_s3_attach" {
+  role       = module.iam_strapie_server_role.role_name
+  policy_arn = aws_iam_policy.strapie_s3_policy.arn
+}
+
 
