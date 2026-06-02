@@ -47,6 +47,10 @@ resource "aws_rds_cluster" "aurora" {
         Environment = var.environment
         Project     = var.project
     }
+
+    lifecycle {
+        ignore_changes = [engine_version]
+    }
 }
 
 
@@ -68,5 +72,9 @@ resource "aws_rds_cluster_instance" "aurora" {
         Name        = "${var.environment}-${var.project}-${var.cluster_identifier}-${count.index}"
         Environment = var.environment
         Project     = var.project
+    }
+
+    lifecycle {
+        ignore_changes = [engine_version]
     }
 }

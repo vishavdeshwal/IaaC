@@ -600,10 +600,7 @@ resource "aws_iam_policy" "webhook_policy" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = [
-          module.secret_database_url.secret_arn,
-          module.secret_gupshup_hmac_secret.secret_arn
-        ]
+        Resource = ["*"]
       }
     ]
   })
@@ -646,12 +643,9 @@ resource "aws_iam_policy" "ingest_policy" {
         Resource = [module.sqs_delay.queue_arn]
       },
       {
-        
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = [
-          module.secret_database_url.secret_arn
-        ]
+        Resource = ["*"]
       }
     ]
   })
@@ -692,11 +686,7 @@ resource "aws_iam_policy" "flush_policy" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = [
-          module.secret_database_url.secret_arn,
-          module.secret_gupshup_token.secret_arn,
-          module.secret_clevertap_passcode.secret_arn
-        ]
+        Resource = ["*"]
       }
     ]
   })
@@ -738,12 +728,7 @@ resource "aws_iam_policy" "ecs_execution_secrets_policy" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = [
-          module.secret_database_url.secret_arn,
-          module.secret_gupshup_hmac_secret.secret_arn,
-          module.secret_gupshup_token.secret_arn,
-          module.secret_clevertap_passcode.secret_arn
-        ]
+        Resource = ["*"]
       },
       {
         Effect   = "Allow"
