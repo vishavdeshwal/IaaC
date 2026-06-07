@@ -27,6 +27,7 @@ resource "aws_ecs_service" "service" {
   availability_zone_rebalancing      = var.availability_zone_rebalancing
   enable_ecs_managed_tags            = var.enable_ecs_managed_tags
   enable_execute_command             = var.enable_execute_command
+  health_check_grace_period_seconds  = var.target_group_arn != null ? var.health_check_grace_period_seconds : null
 
   network_configuration {
     subnets          = var.subnet_ids

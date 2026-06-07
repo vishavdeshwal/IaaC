@@ -132,3 +132,10 @@ variable "task_definition_arn_override" {
   default     = null
   description = "If provided, bypasses creating a task definition and uses this active ARN/family:revision instead"
 }
+
+variable "health_check_grace_period_seconds" {
+  type        = number
+  default     = 0
+  description = "Seconds to ignore failing load balancer health checks on newly instantiated tasks"
+}
+

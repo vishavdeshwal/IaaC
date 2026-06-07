@@ -843,6 +843,7 @@ module "ecs_backend_service" {
   desired_count      = 1
   platform_version   = "1.4.0"
   launch_type        = var.ecs_launch_type
+  health_check_grace_period_seconds = 180
   task_definition_arn_override = "arn:aws:ecs:us-east-1:692137657276:task-definition/staging-backend:6"
 
   subnet_ids         = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
@@ -1190,5 +1191,93 @@ resource "aws_iam_role_policy_attachment" "strapie_server_s3_attach" {
   role       = module.iam_strapie_server_role.role_name
   policy_arn = aws_iam_policy.strapie_s3_policy.arn
 }
+
+# 8. S3 Bucket Public Access Configuration for Strapi Uploads
+resource "aws_s3_bucket_public_access_block" "strapie_uploads_public_access" {
+  bucket = aws_s3_bucket.strapie_uploads.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "strapie_uploads_public_policy" {
+  bucket = aws_s3_bucket.strapie_uploads.id
+
+  depends_on = [aws_s3_bucket_public_access_block.strapie_uploads_public_access]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.strapie_uploads.arn}/*"
+      }
+    ]
+  })
+}
+
+# 9. IAM User with Inline Policy for Altrx CloudWatch Logs Access
+resource "aws_iam_user" "log_reader" {
+  name = "${var.environment}-${var.project}-log-reader"
+  path = "/system/"
+
+  tags = {
+    Name        = "${var.environment}-${var.project}-log-reader"
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+resource "aws_iam_access_key" "log_reader_key" {
+  user = aws_iam_user.log_reader.name
+}
+
+resource "aws_iam_user_policy" "log_reader_policy" {
+  name = "${var.environment}-${var.project}-log-reader-policy"
+  user = aws_iam_user.log_reader.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "CloudWatchLogsReadOnlyAccess"
+        Effect   = "Allow"
+        Action = [
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams",
+          "logs:GetLogEvents",
+          "logs:FilterLogEvents",
+          "logs:StartQuery",
+          "logs:StopQuery",
+          "logs:GetQueryResults",
+          "logs:GetLogRecord"
+        ]
+        Resource = [
+          "arn:aws:logs:us-east-1:692137657276:log-group:*altrx*",
+          "arn:aws:logs:us-east-1:692137657276:log-group:*staging*",
+          "arn:aws:logs:us-east-1:692137657276:log-group:*preprod*",
+          "arn:aws:logs:us-east-1:692137657276:log-group:*pre-prod*",
+          "arn:aws:logs:us-east-1:692137657276:log-group:*prod*"
+        ]
+      },
+      {
+        Sid      = "CloudWatchGlobalReadOnlyAccess"
+        Effect   = "Allow"
+        Action = [
+          "logs:DescribeDestinations",
+          "logs:DescribeQueries"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+
 
 
