@@ -379,6 +379,28 @@ module "dynamodb_checkout_submissions" {
   ]
 }
 
+module "dynamodb_weight_logs" {
+  source       = "../../../../modules/dynamodb"
+  name         = "staging_altrx-weight-logs"
+  hash_key     = "user_id"
+  range_key    = "log_date"
+  billing_mode = "PAY_PER_REQUEST"
+  environment  = var.environment
+  project      = var.project
+  attributes = [
+    { name = "user_id", type = "S" },
+    { name = "log_date", type = "S" },
+    { name = "email", type = "S" }
+  ]
+  global_secondary_indexes = [
+    {
+      name            = "email-index"
+      hash_key        = "email"
+      projection_type = "ALL"
+    }
+  ]
+}
+
 # =============================================================
 # Consolidated Load Balancing (ALB, Listeners, Target Groups)
 # =============================================================
