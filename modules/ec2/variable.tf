@@ -79,3 +79,15 @@ variable "environment" {
 variable "project" {
     type = string
 }
+
+variable "root_volume_encrypted" {
+    type        = bool
+    default     = true
+    description = "Whether to encrypt the root block device"
+}
+
+variable "name_override" {
+    type        = string
+    default     = null
+    description = "Override the default Name tag"
+}

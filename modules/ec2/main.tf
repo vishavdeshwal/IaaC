@@ -14,11 +14,11 @@ resource "aws_instance" "ec2" {
         volume_size           = var.root_volume_size
         volume_type           = var.root_volume_type
         delete_on_termination = true
-        encrypted             = true
+        encrypted             = var.root_volume_encrypted
     }
 
     tags = {
-        Name        = "${var.environment}-${var.project}-${var.name}"
+        Name        = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}"
         Environment = var.environment
         Project     = var.project
     }

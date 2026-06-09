@@ -618,7 +618,7 @@ module "staging_worker_payment_log_group" {
 # =============================================================
 data "aws_iam_policy_document" "ecs_s3_env_policy_doc" {
   statement {
-    actions   = ["s3:GetObject"]
+    actions = ["s3:GetObject"]
     resources = [
       "${aws_s3_bucket.uploads.arn}/worker-env/worker.env",
       "${aws_s3_bucket.uploads.arn}/backend-env/backend.env"
@@ -734,9 +734,9 @@ module "iam_altrx_reconciler_policy" {
 # -------
 
 module "iam_worker_execution_role" {
-  source             = "../../../../modules/iam_role"
-  name               = "staging_altrx-payment-worker-execution-role"
-  description        = "Execution role for v3 payment worker (ECR pull + secret valueFrom)"
+  source      = "../../../../modules/iam_role"
+  name        = "staging_altrx-payment-worker-execution-role"
+  description = "Execution role for v3 payment worker (ECR pull + secret valueFrom)"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -779,9 +779,9 @@ module "iam_worker_execution_inline" {
 }
 
 module "iam_worker_task_role" {
-  source             = "../../../../modules/iam_role"
-  name               = "staging_altrx-payment-worker-task-role"
-  description        = "Task role for v3 payment worker (DDB+SQS+Secrets+Logs)"
+  source      = "../../../../modules/iam_role"
+  name        = "staging_altrx-payment-worker-task-role"
+  description = "Task role for v3 payment worker (DDB+SQS+Secrets+Logs)"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -856,19 +856,19 @@ module "ecs_cluster" {
 }
 
 module "ecs_backend_service" {
-  source             = "../../../../modules/ecs_service"
-  service_name       = "Staging-Backend"
-  family             = "staging-backend"
-  cluster_arn        = module.ecs_cluster.cluster_arn
-  cpu                = "256"
-  memory             = "512"
-  execution_role_arn = module.iam_ecs_task_execution_role.role_arn
-  task_role_arn      = module.iam_ecs_task_execution_role.role_arn
-  desired_count      = 1
-  platform_version   = "1.4.0"
-  launch_type        = var.ecs_launch_type
+  source                            = "../../../../modules/ecs_service"
+  service_name                      = "Staging-Backend"
+  family                            = "staging-backend"
+  cluster_arn                       = module.ecs_cluster.cluster_arn
+  cpu                               = "256"
+  memory                            = "512"
+  execution_role_arn                = module.iam_ecs_task_execution_role.role_arn
+  task_role_arn                     = module.iam_ecs_task_execution_role.role_arn
+  desired_count                     = 1
+  platform_version                  = "1.4.0"
+  launch_type                       = var.ecs_launch_type
   health_check_grace_period_seconds = 180
-  task_definition_arn_override = "arn:aws:ecs:us-east-1:692137657276:task-definition/staging-backend:6"
+  task_definition_arn_override      = "arn:aws:ecs:us-east-1:692137657276:task-definition/staging-backend:6"
 
   subnet_ids         = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
   security_group_ids = [module.staging_be_sg.security_group_id]
@@ -932,27 +932,27 @@ module "lambda_reconciler" {
 }
 
 module "ecr_reconciler" {
-  source                = "../../../../modules/ecr"
-  name                  = "reconciler"
-  environment           = var.environment
-  project               = var.project
-  name_override         = "staging-reconciler"
-  image_tag_mutability  = "MUTABLE"
-  scan_on_push          = true
+  source               = "../../../../modules/ecr"
+  name                 = "reconciler"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "staging-reconciler"
+  image_tag_mutability = "MUTABLE"
+  scan_on_push         = true
 }
 
 module "ecs_worker_service" {
-  source             = "../../../../modules/ecs_service"
-  service_name       = "Staging-Worker-Payment"
-  family             = "staging_altrx-payment-worker"
-  cluster_arn        = module.ecs_cluster.cluster_arn
-  cpu                = "256"
-  memory             = "512"
-  execution_role_arn = module.iam_worker_execution_role.role_arn
-  task_role_arn      = module.iam_worker_task_role.role_arn
-  desired_count      = 1
-  platform_version   = "LATEST"
-  launch_type        = var.ecs_launch_type
+  source                       = "../../../../modules/ecs_service"
+  service_name                 = "Staging-Worker-Payment"
+  family                       = "staging_altrx-payment-worker"
+  cluster_arn                  = module.ecs_cluster.cluster_arn
+  cpu                          = "256"
+  memory                       = "512"
+  execution_role_arn           = module.iam_worker_execution_role.role_arn
+  task_role_arn                = module.iam_worker_task_role.role_arn
+  desired_count                = 1
+  platform_version             = "LATEST"
+  launch_type                  = var.ecs_launch_type
   task_definition_arn_override = "arn:aws:ecs:us-east-1:692137657276:task-definition/staging_altrx-payment-worker:6"
 
   subnet_ids         = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
@@ -1105,7 +1105,7 @@ module "sg_strapie_db" {
 resource "aws_db_subnet_group" "strapie_db_subnet_group" {
   name        = "strapie-postgres-subnet-group"
   description = "It will place strapie db"
-  subnet_ids  = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["private1"],
     module.subnets.private_subnet_ids["private4"]
   ]
@@ -1119,31 +1119,32 @@ resource "aws_db_subnet_group" "strapie_db_subnet_group" {
 
 # 4. Postgres DB Instance (Native to match AWS name exactly)
 resource "aws_db_instance" "strapie_db" {
-  identifier                  = "strapie-postgres-db"
-  allocated_storage           = 100
-  max_allocated_storage       = 1000
-  storage_type                = "gp3"
-  engine                      = "postgres"
-  engine_version              = "18.3"
-  instance_class              = "db.m7g.large"
-  username                    = "postgres"
-  password                    = "StagingSecurePass123!" # Terraform ignores password updates on import
+  identifier            = "staging-strapie-db"
+  allocated_storage     = 100
+  max_allocated_storage = 1000
+  storage_type          = "gp3"
+  engine                = "postgres"
+  engine_version        = "18.3"
+  instance_class        = "db.m7g.large"
+  username              = "postgres"
+  password              = "StagingSecurePass123!" # Terraform ignores password updates on import
 
-  db_subnet_group_name        = aws_db_subnet_group.strapie_db_subnet_group.name
-  vpc_security_group_ids      = [module.sg_strapie_db.security_group_id]
-  multi_az                    = true
-  publicly_accessible         = false
-  storage_encrypted           = true
-  kms_key_id                  = "arn:aws:kms:us-east-1:692137657276:key/4a92e403-aaf9-4374-bf51-0871ed6b4acd"
-  backup_retention_period     = 7
-  backup_window               = "07:13-07:43"
-  maintenance_window          = "wed:09:57-wed:10:27"
+  db_subnet_group_name    = aws_db_subnet_group.strapie_db_subnet_group.name
+  vpc_security_group_ids  = [module.sg_strapie_db.security_group_id]
+  multi_az                = true
+  publicly_accessible     = false
+  storage_encrypted       = true
+  kms_key_id              = "arn:aws:kms:us-east-1:692137657276:key/4a92e403-aaf9-4374-bf51-0871ed6b4acd"
+  backup_retention_period = 7
+  backup_window           = "07:13-07:43"
+  maintenance_window      = "wed:09:57-wed:10:27"
 
   performance_insights_enabled          = true
   performance_insights_kms_key_id       = "arn:aws:kms:us-east-1:692137657276:key/4a92e403-aaf9-4374-bf51-0871ed6b4acd"
   performance_insights_retention_period = 7
 
-  skip_final_snapshot         = true
+  skip_final_snapshot = true
+  apply_immediately   = true
 
   lifecycle {
     ignore_changes = [
@@ -1159,8 +1160,8 @@ resource "aws_db_instance" "strapie_db" {
 
 # 5. EC2 Server IAM Role (Using modules/iam_role)
 module "iam_strapie_server_role" {
-  source             = "../../../../modules/iam_role"
-  name               = "altrx_ssm_role"
+  source = "../../../../modules/iam_role"
+  name   = "altrx_ssm_role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1178,6 +1179,38 @@ module "iam_strapie_server_role" {
   project     = var.project
 }
 
+# 5.1 Strapie EC2 Instance, Instance Profile, & EIP (Modular)
+resource "aws_iam_instance_profile" "strapie_profile" {
+  name = "altrx_ssm_role"
+  role = module.iam_strapie_server_role.role_name
+}
+
+module "staging_strapie_server" {
+  source                = "../../../../modules/ec2"
+  name                  = "strapie"
+  name_override         = "Staging-Strapie-Server"
+  ami_id                = "ami-091138d0f0d41ff90"
+  instance_type         = "t2.medium"
+  subnet_id             = module.subnets.public_subnet_ids["public1"]
+  security_group_ids    = [module.sg_strapie.security_group_id]
+  iam_instance_profile  = aws_iam_instance_profile.strapie_profile.name
+  associate_public_ip   = true
+  root_volume_size      = 50
+  root_volume_type      = "gp3"
+  root_volume_encrypted = false
+  environment           = var.environment
+  project               = var.project
+}
+
+module "staging_strapie_eip" {
+  source        = "../../../../modules/eip"
+  environment   = var.environment
+  project       = var.project
+  name          = "strapie-eip"
+  name_override = "Staging-strapie-EIP"
+  instance_id   = module.staging_strapie_server.instance_id
+}
+
 # 6. S3 Bucket for strapie Uploads
 resource "aws_s3_bucket" "strapie_uploads" {
   bucket = "${var.environment}-${lower(var.project)}-strapie-uploads"
@@ -1193,12 +1226,12 @@ resource "aws_s3_bucket" "strapie_uploads" {
 resource "aws_iam_policy" "strapie_s3_policy" {
   name        = "${var.environment}-${var.project}-strapie-s3-access"
   description = "Allows Staging Strapie Server to access its dedicated S3 bucket"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject",
@@ -1271,8 +1304,8 @@ resource "aws_iam_user_policy" "log_reader_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "CloudWatchLogsReadOnlyAccess"
-        Effect   = "Allow"
+        Sid    = "CloudWatchLogsReadOnlyAccess"
+        Effect = "Allow"
         Action = [
           "logs:DescribeLogGroups",
           "logs:DescribeLogStreams",
@@ -1292,8 +1325,8 @@ resource "aws_iam_user_policy" "log_reader_policy" {
         ]
       },
       {
-        Sid      = "CloudWatchGlobalReadOnlyAccess"
-        Effect   = "Allow"
+        Sid    = "CloudWatchGlobalReadOnlyAccess"
+        Effect = "Allow"
         Action = [
           "logs:DescribeDestinations",
           "logs:DescribeQueries"

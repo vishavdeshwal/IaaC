@@ -42,3 +42,28 @@ output "dynamodb_stripe_customers_id" {
   value       = module.dynamodb_stripe_customers.table_id
   description = "Name of the stripe-customers DynamoDB table"
 }
+
+output "strapie_postgres_endpoint" {
+  value       = module.prod_strapie_db.endpoint
+  description = "Connection endpoint for the production Strapie Postgres database"
+}
+
+output "strapie_postgres_identifier" {
+  value       = module.prod_strapie_db.instance_id
+  description = "Identifier of the production Strapie Postgres database"
+}
+
+output "strapie_server_role_arn" {
+  value       = module.iam_altrx_ssm_role.role_arn
+  description = "IAM Role ARN attached to the production Strapie Server"
+}
+
+output "strapie_uploads_bucket_name" {
+  value       = aws_s3_bucket.strapie_uploads.id
+  description = "Name of the production Strapie uploads S3 bucket"
+}
+
+output "strapie_uploads_bucket_arn" {
+  value       = aws_s3_bucket.strapie_uploads.arn
+  description = "ARN of the production Strapie uploads S3 bucket"
+}

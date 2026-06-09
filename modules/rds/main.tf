@@ -20,7 +20,7 @@ resource "aws_db_subnet_group" "rds" {
 # -------
 
 resource "aws_db_instance" "rds" {
-    identifier              = "${var.environment}-${var.project}-${var.identifier}"
+    identifier              = lower("${var.environment}-${var.project}-${var.identifier}")
     engine                  = var.engine
     engine_version          = var.engine_version
     instance_class          = var.instance_class

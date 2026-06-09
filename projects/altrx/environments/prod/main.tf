@@ -1024,4 +1024,220 @@ module "cloudwatch_alerts" {
   sns_topic_arn  = var.sns_topic_arn
 }
 
+# =============================================================
+# Strapie Infrastructure (Modularized)
+# =============================================================
+
+# 1. EC2 Security Group (Using modules/security_groups)
+module "sg_strapie" {
+  source        = "../../../../modules/security_groups"
+  vpc_id        = module.vpc.vpc_id
+  name          = "strapie"
+  name_override = "Prod-Strapie-SG"
+  description   = "It allows all traffic to strapie"
+  environment   = var.environment
+  project       = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 22
+      to_port         = 22
+      protocol        = "tcp"
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+      description     = "Allow SSH access from anywhere"
+    },
+    {
+      from_port       = 1337
+      to_port         = 1337
+      protocol        = "tcp"
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+      description     = "Allow application to be accessed"
+    },
+    {
+      from_port       = 80
+      to_port         = 80
+      protocol        = "tcp"
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+      description     = "Allow HTTP access from anywhere"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port       = 0
+      to_port         = 0
+      protocol        = "-1"
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+      description     = "Allow all outbound"
+    }
+  ]
+}
+
+# 2. Database Security Group (Using modules/security_groups)
+module "sg_strapie_db" {
+  source        = "../../../../modules/security_groups"
+  vpc_id        = module.vpc.vpc_id
+  name          = "strapie-db"
+  name_override = "Prod-Strapie-DB-SG"
+  description   = "it allows traffic from strapie-sg"
+  environment   = var.environment
+  project       = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      cidr_blocks     = []
+      security_groups = [module.sg_strapie.security_group_id]
+      description     = "Postgres inbound from EC2"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port       = 0
+      to_port         = 0
+      protocol        = "-1"
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+      description     = "Allow all outbound"
+    }
+  ]
+}
+
+# 3 & 4. Database Subnet Group & DB Instance (Using modules/rds)
+module "prod_strapie_db" {
+  source                = "../../../../modules/rds"
+  identifier            = "strapie-db"
+  allocated_storage     = 100
+  max_allocated_storage = 1000
+  engine                = "postgres"
+  engine_version        = "18.3"
+  instance_class        = "db.m7g.large"
+  username              = "postgres"
+  password              = "ProductionSecurePass123!"
+
+  subnet_ids             = [
+    module.subnets.private_subnet_ids["private1"],
+    module.subnets.private_subnet_ids["private4"]
+  ]
+  security_group_ids     = [module.sg_strapie_db.security_group_id]
+  multi_az               = true
+  publicly_accessible    = false
+  storage_encrypted      = true
+  backup_retention_period = 7
+  backup_window          = "07:13-07:43"
+  maintenance_window     = "wed:09:57-wed:10:27"
+  skip_final_snapshot    = true
+  environment            = var.environment
+  project                = var.project
+}
+
+# 5. EC2 Instance Profile (Uses the existing global "altrx_ssm_role")
+resource "aws_iam_instance_profile" "strapie_profile" {
+  name = "production-altrx-strapie-profile"
+  role = module.iam_altrx_ssm_role.role_name
+}
+
+# 5.1 Production Strapie EC2 Server (Using modules/ec2)
+module "production_strapie_server" {
+  source                = "../../../../modules/ec2"
+  name                  = "strapie"
+  name_override         = "Prod-Strapie-Server"
+  ami_id                = "ami-091138d0f0d41ff90"
+  instance_type         = "t2.medium"
+  subnet_id             = module.subnets.public_subnet_ids["public1"]
+  security_group_ids    = [module.sg_strapie.security_group_id]
+  iam_instance_profile  = aws_iam_instance_profile.strapie_profile.name
+  associate_public_ip   = true
+  root_volume_size      = 50
+  root_volume_type      = "gp3"
+  root_volume_encrypted = true
+  environment           = var.environment
+  project               = var.project
+}
+
+# 5.2 Elastic IP for Strapie Server (Using modules/eip)
+module "production_strapie_eip" {
+  source        = "../../../../modules/eip"
+  environment   = var.environment
+  project       = var.project
+  name          = "strapie-eip"
+  name_override = "Prod-strapie-EIP"
+  instance_id   = module.production_strapie_server.instance_id
+}
+
+# 6. S3 Bucket for strapie Uploads
+resource "aws_s3_bucket" "strapie_uploads" {
+  bucket = var.environment == "prod" ? "production-${lower(var.project)}-strapie-uploads" : "${var.environment}-${lower(var.project)}-strapie-uploads"
+
+  tags = {
+    Name        = var.environment == "prod" ? "production-${lower(var.project)}-strapie-uploads" : "${var.environment}-${lower(var.project)}-strapie-uploads"
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+# 7. IAM Policy & Attachment (Using modules/iam_policy)
+module "strapie_s3_policy" {
+  source      = "../../../../modules/iam_policy"
+  name        = "${var.environment}-${var.project}-strapie-s3-access"
+  description = "Allows Production Strapie Server to access its dedicated S3 bucket"
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.strapie_uploads.arn,
+          "${aws_s3_bucket.strapie_uploads.arn}/*"
+        ]
+      }
+    ]
+  })
+  role_name   = module.iam_altrx_ssm_role.role_name
+  environment = var.environment
+  project     = var.project
+}
+
+# 8. S3 Bucket Public Access Configuration for Strapi Uploads
+resource "aws_s3_bucket_public_access_block" "strapie_uploads_public_access" {
+  bucket = aws_s3_bucket.strapie_uploads.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "strapie_uploads_public_policy" {
+  bucket = aws_s3_bucket.strapie_uploads.id
+
+  depends_on = [aws_s3_bucket_public_access_block.strapie_uploads_public_access]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.strapie_uploads.arn}/*"
+      }
+    ]
+  })
+}
+
 
