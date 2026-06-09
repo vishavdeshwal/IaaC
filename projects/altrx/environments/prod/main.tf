@@ -1048,14 +1048,6 @@ module "sg_strapie" {
       description     = "Allow SSH access from anywhere"
     },
     {
-      from_port       = 1337
-      to_port         = 1337
-      protocol        = "tcp"
-      cidr_blocks     = ["0.0.0.0/0"]
-      security_groups = []
-      description     = "Allow application to be accessed"
-    },
-    {
       from_port       = 80
       to_port         = 80
       protocol        = "tcp"
