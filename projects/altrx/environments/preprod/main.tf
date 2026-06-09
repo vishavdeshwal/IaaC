@@ -784,6 +784,8 @@ module "lambda_reconciler" {
   timeout                    = 600
   environment_variables      = var.reconciler_env_vars
   additional_policy_arns     = [aws_iam_policy.altrx_reconciler_policy.arn]
+  ecr_repository_name        = module.ecr_reconciler.repository_name
+  ecr_repository_arn         = module.ecr_reconciler.repository_arn
 }
 
 module "ecr_reconciler" {

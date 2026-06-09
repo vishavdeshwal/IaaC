@@ -701,7 +701,9 @@ data "aws_iam_policy_document" "altrx_reconciler_policy_doc" {
       "${module.dynamodb_stripe_customers.table_arn}/index/*",
       module.dynamodb_processed_events.table_arn,
       module.dynamodb_payment_events_log.table_arn,
-      "${module.dynamodb_payment_events_log.table_arn}/index/*"
+      "${module.dynamodb_payment_events_log.table_arn}/index/*",
+      module.dynamodb_weight_logs.table_arn,
+      "${module.dynamodb_weight_logs.table_arn}/index/*"
     ]
   }
   statement {
@@ -925,16 +927,18 @@ module "lambda_reconciler" {
   timeout                = 600
   environment_variables  = var.reconciler_env_vars
   additional_policy_arns = [module.iam_altrx_reconciler_policy.policy_arn]
+  ecr_repository_name    = module.ecr_reconciler.repository_name
+  ecr_repository_arn     = module.ecr_reconciler.repository_arn
 }
 
 module "ecr_reconciler" {
-  source               = "../../../../modules/ecr"
-  name                 = "reconciler"
-  environment          = var.environment
-  project              = var.project
-  name_override        = "staging-reconciler"
-  image_tag_mutability = "MUTABLE"
-  scan_on_push         = true
+  source                = "../../../../modules/ecr"
+  name                  = "reconciler"
+  environment           = var.environment
+  project               = var.project
+  name_override         = "staging-reconciler"
+  image_tag_mutability  = "MUTABLE"
+  scan_on_push          = true
 }
 
 module "ecs_worker_service" {

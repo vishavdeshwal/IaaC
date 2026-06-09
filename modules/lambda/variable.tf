@@ -121,3 +121,15 @@ variable "role_name_override" {
     default = null
 }
 
+variable "ecr_repository_name" {
+    type        = string
+    default     = null
+    description = "The name of the ECR repository to attach Lambda ECR image retrieval policy"
+}
+
+variable "ecr_repository_arn" {
+    type        = string
+    default     = null
+    description = "The ARN of the ECR repository for Lambda execution role to read from"
+}
+
