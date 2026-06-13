@@ -323,6 +323,30 @@ module "dynamodb_checkout_submissions" {
   ]
 }
 
+
+module "dynamodb_weight_logs" {
+  source                      = "../../../../modules/dynamodb"
+  name                        = "${var.environment}_${lower(var.project)}-weight-logs"
+  hash_key                    = "user_id"
+  range_key                   = "log_date"
+  billing_mode                = "PAY_PER_REQUEST"
+  deletion_protection_enabled = true
+  environment                 = var.environment
+  project                     = var.project
+  attributes = [
+    { name = "user_id", type = "S" },
+    { name = "log_date", type = "S" },
+    { name = "email", type = "S" }
+  ]
+  global_secondary_indexes = [
+    {
+      name            = "email-index"
+      hash_key        = "email"
+      projection_type = "ALL"
+    }
+  ]
+}
+
 # =============================================================
 # Consolidated Load Balancing (ALB, Listeners, Target Groups)
 # =============================================================
@@ -337,10 +361,10 @@ module "preprod_target_group" {
   health_check_path    = "/healthz"
   health_check_protocol = "HTTP"
   health_check_port    = "traffic-port"
-  health_check_interval = 30
+  health_check_interval = 15
   health_check_timeout = 5
-  healthy_threshold   = 5
-  unhealthy_threshold = 2
+  healthy_threshold   = 2
+  unhealthy_threshold = 3
   health_check_matcher = "200"
   environment          = var.environment
   project              = var.project
@@ -673,7 +697,9 @@ resource "aws_iam_policy" "altrx_reconciler_policy" {
         "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-stripe-customers/index/*",
         "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-processed-events",
         "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-payment-events-log",
-        "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-payment-events-log/index/*"
+        "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-payment-events-log/index/*",
+        "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-weight-logs",
+        "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-weight-logs/index/*"
       ]
       Sid      = "DynamoDBAccess"
       }, {
@@ -712,17 +738,18 @@ module "ecs_cluster" {
 }
 
 module "ecs_backend_service" {
-  source             = "../../../../modules/ecs_service"
-  service_name       = "${title(var.environment)}-Backend"
-  family             = "${var.environment}-backend"
-  cluster_arn        = module.ecs_cluster.cluster_arn
-  cpu                = "256"
-  memory             = "512"
-  execution_role_arn = module.iam_ecs_task_execution_role.role_arn
-  task_role_arn      = module.iam_ecs_task_execution_role.role_arn
-  desired_count      = 1
-  platform_version   = "1.4.0"
-  launch_type        = var.ecs_launch_type
+  source                            = "../../../../modules/ecs_service"
+  service_name                      = "${title(var.environment)}-Backend"
+  family                            = "${var.environment}-backend"
+  cluster_arn                       = module.ecs_cluster.cluster_arn
+  cpu                               = "256"
+  memory                            = "512"
+  execution_role_arn                = module.iam_ecs_task_execution_role.role_arn
+  task_role_arn                     = module.iam_ecs_task_execution_role.role_arn
+  desired_count                     = 1
+  platform_version                  = "1.4.0"
+  launch_type                       = var.ecs_launch_type
+  health_check_grace_period_seconds = 180
   
   subnet_ids          = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
   security_group_ids  = [module.preprod_be_sg.security_group_id]

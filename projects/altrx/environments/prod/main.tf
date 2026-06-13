@@ -334,6 +334,30 @@ module "dynamodb_checkout_submissions" {
   ]
 }
 
+module "dynamodb_weight_logs" {
+  source                      = "../../../../modules/dynamodb"
+  name                        = "production_altrx-weight-logs"
+  hash_key                    = "user_id"
+  range_key                   = "log_date"
+  billing_mode                = "PAY_PER_REQUEST"
+  deletion_protection_enabled = true
+  environment                 = var.environment
+  project                     = var.project
+  attributes = [
+    { name = "user_id", type = "S" },
+    { name = "log_date", type = "S" },
+    { name = "email", type = "S" }
+  ]
+  global_secondary_indexes = [
+    {
+      name            = "email-index"
+      hash_key        = "email"
+      projection_type = "ALL"
+    }
+  ]
+}
+
+
 
 # =============================================================
 # Consolidated Load Balancing (ALB, Listeners, Target Groups)
@@ -738,7 +762,7 @@ resource "aws_iam_policy" "altrx_reconciler_policy" {
     Statement = [{
       Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:DescribeTable"]
       Effect   = "Allow"
-      Resource = ["arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-checkout-submissions", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-checkout-submissions/index/*", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-stripe-customers", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-stripe-customers/index/*", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-processed-events", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-events-log", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-events-log/index/*"]
+      Resource = ["arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-checkout-submissions", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-checkout-submissions/index/*", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-stripe-customers", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-stripe-customers/index/*", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-processed-events", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-events-log", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-events-log/index/*", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-weight-logs", "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-weight-logs/index/*"]
       Sid      = "DynamoDBAccess"
       }, {
       Action   = ["sqs:SendMessage"]
@@ -1054,6 +1078,14 @@ module "sg_strapie" {
       cidr_blocks     = ["0.0.0.0/0"]
       security_groups = []
       description     = "Allow HTTP access from anywhere"
+    },
+    {
+      from_port       = 443
+      to_port         = 443
+      protocol        = "tcp"
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+      description     = "Allow HTTPS access from anywhere"
     }
   ]
 
