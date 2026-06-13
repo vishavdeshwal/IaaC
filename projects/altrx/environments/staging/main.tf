@@ -1175,7 +1175,10 @@ module "iam_strapie_server_role" {
   policy_arns = [
     "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   ]
-  environment = var.environment
+  # This role is also managed by prod (module.iam_altrx_ssm_role) since
+  # IAM role names are account-global. Use a shared tag value so both
+  # environments converge on the same desired state instead of fighting.
+  environment = "shared"
   project     = var.project
 }
 
@@ -1336,7 +1339,3 @@ resource "aws_iam_user_policy" "log_reader_policy" {
     ]
   })
 }
-
-
-
-

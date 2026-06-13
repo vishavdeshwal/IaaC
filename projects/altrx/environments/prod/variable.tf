@@ -58,19 +58,8 @@ variable "reconciler_env_vars" {
   sensitive   = true
 }
 
-variable "amplify_env_vars" {
-  type        = map(string)
-  description = "Environment variables for the Amplify App"
-  sensitive   = true
-}
-
 variable "ecs_launch_type" {
   type        = string
   default     = null
   description = "Launch type for ECS Services (null when using capacity provider strategies)"
-}
-
-variable "sns_topic_arn" {
-  type        = string
-  description = "The ARN of the pre-provisioned SNS topic to send alerts to"
 }

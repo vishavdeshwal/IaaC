@@ -529,16 +529,6 @@ resource "aws_cloudwatch_log_group" "reconciler" {
   tags_all          = {}
 }
 
-resource "aws_cloudwatch_log_group" "amplify" {
-  kms_key_id        = null
-  log_group_class   = "STANDARD"
-  name              = "/aws/amplify/dsx3g35brvnhn"
-  retention_in_days = 0
-  skip_destroy      = false
-  tags              = {}
-  tags_all          = {}
-}
-
 resource "aws_cloudwatch_log_group" "redis_prod" {
   kms_key_id        = null
   log_group_class   = "STANDARD"
@@ -584,32 +574,6 @@ resource "aws_cloudwatch_log_group" "prod_worker_payment" {
 # Consolidated IAM Roles & Policies
 # =============================================================
 
-resource "aws_iam_policy" "amplify_ssr_logging_policy" {
-  description = null
-  name        = "AmplifySSRLoggingPolicy-638507c3-6940-4947-b58d-16f5ca25c35a"
-  path        = "/service-role/"
-  policy = jsonencode({
-    Statement = [{
-      Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
-      Effect   = "Allow"
-      Resource = "arn:aws:logs:us-east-1:692137657276:log-group:/aws/amplify/*:log-stream:*"
-      Sid      = "PushLogs"
-      }, {
-      Action   = "logs:CreateLogGroup"
-      Effect   = "Allow"
-      Resource = "arn:aws:logs:us-east-1:692137657276:log-group:/aws/amplify/*"
-      Sid      = "CreateLogGroup"
-      }, {
-      Action   = "logs:DescribeLogGroups"
-      Effect   = "Allow"
-      Resource = "arn:aws:logs:us-east-1:692137657276:log-group:*"
-      Sid      = "DescribeLogGroups"
-    }]
-    Version = "2012-10-17"
-  })
-  tags     = {}
-  tags_all = {}
-}
 
 resource "aws_iam_policy" "ecs_s3_env_policy" {
   name        = "${var.environment}-ecs-s3-env-policy"
@@ -714,9 +678,12 @@ resource "aws_iam_role_policy_attachment" "ecs_dynamodb_sqs_attachment" {
 
 
 module "iam_altrx_ssm_role" {
-  source      = "../../../../modules/iam_role"
-  name        = "altrx_ssm_role"
-  environment = var.environment
+  source = "../../../../modules/iam_role"
+  name   = "altrx_ssm_role"
+  # This role is also managed by staging (module.iam_strapie_server_role) since
+  # IAM role names are account-global. Use a shared tag value so both
+  # environments converge on the same desired state instead of fighting.
+  environment = "shared"
   project     = var.project
   assume_role_policy = jsonencode({
     Statement = [{
@@ -730,27 +697,6 @@ module "iam_altrx_ssm_role" {
   })
   policy_arns = [
     "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
-  ]
-}
-
-module "iam_amplify_ssr_logging_role" {
-  source      = "../../../../modules/iam_role"
-  name        = "AmplifySSRLoggingRole-638507c3-6940-4947-b58d-16f5ca25c35a"
-  path        = "/service-role/"
-  environment = var.environment
-  project     = var.project
-  assume_role_policy = jsonencode({
-    Statement = [{
-      Action = "sts:AssumeRole"
-      Effect = "Allow"
-      Principal = {
-        Service = "amplify.amazonaws.com"
-      }
-    }]
-    Version = "2012-10-17"
-  })
-  policy_arns = [
-    aws_iam_policy.amplify_ssr_logging_policy.arn
   ]
 }
 
@@ -809,8 +755,8 @@ module "ecs_backend_service" {
   service_name                 = "Prod-Backend"
   family                       = "prod-backend"
   cluster_arn                  = module.ecs_cluster.cluster_arn
-  cpu                          = "256"
-  memory                       = "512"
+  cpu                          = "512"
+  memory                       = "1024"
   execution_role_arn           = module.iam_ecs_task_execution_role.role_arn
   task_role_arn                = module.iam_ecs_task_execution_role.role_arn
   desired_count                = 1
@@ -830,8 +776,8 @@ module "ecs_backend_service" {
   container_definitions = jsonencode([{
     name      = "backend"
     image     = "public.ecr.aws/ecs-sample-image/amazon-ecs-sample:latest"
-    cpu       = 256
-    memory    = 512
+    cpu       = 512
+    memory    = 1024
     essential = true
     portMappings = [{
       containerPort = 8000
@@ -960,53 +906,6 @@ module "ecr_prod_backend" {
   scan_on_push         = false
 }
 
-resource "aws_amplify_app" "production" {
-  access_token                  = null # sensitive
-  auto_branch_creation_patterns = []
-  basic_auth_credentials        = null # sensitive
-  build_spec                    = "version: 1\nfrontend:\n  phases:\n    preBuild:\n      commands:\n        - nvm use 20  # Use Node.js v20 as required by vite-builder\n        - npm ci\n    build:\n      commands:\n        - npx nuxi build\n  artifacts:\n    baseDirectory: .output\n    files:\n      - '**/*'\n  cache:\n    paths:\n      - node_modules/**/*"
-  compute_role_arn              = null
-  description                   = null
-  enable_auto_branch_creation   = false
-  enable_basic_auth             = false
-  enable_branch_auto_build      = false
-  enable_branch_auto_deletion   = false
-  environment_variables = var.amplify_env_vars
-  iam_service_role_arn = "arn:aws:iam::692137657276:role/service-role/AmplifySSRLoggingRole-638507c3-6940-4947-b58d-16f5ca25c35a"
-  name                 = "Production_Altrx"
-  oauth_token          = null # sensitive
-  platform             = "WEB_COMPUTE"
-  repository           = "https://github.com/trinity-healthcare-supply/altrx"
-  tags                 = {}
-  tags_all             = {}
-  cache_config {
-    type = "AMPLIFY_MANAGED_NO_COOKIES"
-  }
-  custom_rule {
-    condition = null
-    source    = "https://altrx.com"
-    status    = "302"
-    target    = "https://www.altrx.com"
-  }
-  custom_rule {
-    condition = null
-    source    = "/blogs"
-    status    = "200"
-    target    = "https://blogs.altrx.com"
-  }
-  custom_rule {
-    condition = null
-    source    = "/blogs/<*>"
-    status    = "200"
-    target    = "https://blogs.altrx.com/<*>"
-  }
-  custom_rule {
-    condition = null
-    source    = "/<*>"
-    status    = "404-200"
-    target    = "/index.html"
-  }
-}
 
 # Consolidated S3 Storage (Importing existing bucket)
 # =============================================================
@@ -1040,13 +939,6 @@ resource "aws_s3_bucket_cors_configuration" "uploads_cors" {
   }
 }
 
-module "cloudwatch_alerts" {
-  source         = "../../../../modules/cloudwatch_alerts"
-  environment    = var.environment
-  project        = var.project
-  log_group_name = aws_cloudwatch_log_group.amplify.name
-  sns_topic_arn  = var.sns_topic_arn
-}
 
 # =============================================================
 # Strapie Infrastructure (Modularized)
