@@ -750,6 +750,16 @@ module "ecs_cluster" {
   project                   = var.project
 }
 
+# CI/CD registers new revisions for these families directly; always pick up
+# whatever is currently the latest ACTIVE revision instead of hardcoding one.
+data "aws_ecs_task_definition" "prod_backend" {
+  task_definition = "prod-backend"
+}
+
+data "aws_ecs_task_definition" "prod_worker_payment" {
+  task_definition = "Prod-Worker-Payment"
+}
+
 module "ecs_backend_service" {
   source                       = "../../../../modules/ecs_service"
   service_name                 = "Prod-Backend"
@@ -762,7 +772,7 @@ module "ecs_backend_service" {
   desired_count                = 1
   platform_version             = "1.4.0"
   launch_type                  = var.ecs_launch_type
-  task_definition_arn_override = "prod-backend:11"
+  task_definition_arn_override = data.aws_ecs_task_definition.prod_backend.arn
 
   subnet_ids         = [module.subnets.private_subnet_ids["private3"], module.subnets.private_subnet_ids["private4"]]
   security_group_ids = [module.prod_be_sg.security_group_id]
@@ -852,7 +862,7 @@ module "ecs_worker_service" {
   desired_count                = 2
   platform_version             = "LATEST"
   launch_type                  = var.ecs_launch_type
-  task_definition_arn_override = "Prod-Worker-Payment:4"
+  task_definition_arn_override = data.aws_ecs_task_definition.prod_worker_payment.arn
 
   subnet_ids         = [module.subnets.private_subnet_ids["private3"], module.subnets.private_subnet_ids["private4"]]
   security_group_ids = [module.prod_worker_sg.security_group_id]
