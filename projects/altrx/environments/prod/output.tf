@@ -67,3 +67,14 @@ output "strapie_uploads_bucket_arn" {
   value       = aws_s3_bucket.strapie_uploads.arn
   description = "ARN of the production Strapie uploads S3 bucket"
 }
+
+output "strapie_cloudfront_domain_name" {
+  value       = module.cloudfront_strapie.cloudfront_domain_name
+  description = "Domain name of the CloudFront distribution for Strapi uploads"
+}
+
+output "strapie_cloudfront_distribution_id" {
+  value       = module.cloudfront_strapie.cloudfront_distribution_id
+  description = "ID of the CloudFront distribution for Strapi uploads"
+}
+
