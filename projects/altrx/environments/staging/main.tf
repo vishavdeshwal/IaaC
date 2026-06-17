@@ -1278,9 +1278,9 @@ resource "aws_s3_bucket_public_access_block" "strapie_uploads_public_access" {
   bucket = aws_s3_bucket.strapie_uploads.id
 
   block_public_acls       = true
-  block_public_policy     = true
+  block_public_policy     = false
   ignore_public_acls      = true
-  restrict_public_buckets = true
+  restrict_public_buckets = false
 }
 
 resource "aws_s3_bucket_policy" "strapie_uploads_public_policy" {
@@ -1304,6 +1304,13 @@ resource "aws_s3_bucket_policy" "strapie_uploads_public_policy" {
             "AWS:SourceArn" = module.cloudfront_strapie.cloudfront_distribution_arn
           }
         }
+      },
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.strapie_uploads.arn}/*"
       }
     ]
   })
