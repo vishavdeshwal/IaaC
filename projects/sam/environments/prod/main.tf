@@ -328,6 +328,10 @@ module "aurora" {
         module.db-sg.security_group_id
     ]
 
+    performance_insights_enabled          = true
+    performance_insights_retention_period = 7
+    apply_immediately                     = true
+
     environment = var.environment
     project = var.project
 }

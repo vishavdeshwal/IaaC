@@ -111,3 +111,21 @@ variable "project" {
   type = string
 }
 
+variable "performance_insights_enabled" {
+  type        = bool
+  default     = false
+  description = "Specifies whether Performance Insights is enabled or not"
+}
+
+variable "performance_insights_retention_period" {
+  type        = number
+  default     = null
+  description = "Amount of time in days to retain Performance Insights data (7, or month-based retention periods)"
+}
+
+variable "performance_insights_kms_key_id" {
+  type        = string
+  default     = null
+  description = "The ARN for the KMS key to encrypt Performance Insights data"
+}
+

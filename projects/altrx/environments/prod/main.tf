@@ -1109,15 +1109,6 @@ resource "aws_s3_bucket" "strapie_uploads" {
   }
 }
 
-# 6.1 CloudFront Distribution for strapie Uploads S3 bucket
-module "cloudfront_strapie" {
-  source                         = "../../../../modules/cloudfront"
-  s3_bucket_id                   = aws_s3_bucket.strapie_uploads.id
-  s3_bucket_regional_domain_name = aws_s3_bucket.strapie_uploads.bucket_regional_domain_name
-  environment                    = var.environment
-  project                        = var.project
-}
-
 
 # 7. IAM Policy & Attachment (Using modules/iam_policy)
 module "strapie_s3_policy" {
@@ -1151,10 +1142,10 @@ module "strapie_s3_policy" {
 resource "aws_s3_bucket_public_access_block" "strapie_uploads_public_access" {
   bucket = aws_s3_bucket.strapie_uploads.id
 
-  block_public_acls       = true
-  block_public_policy     = true
-  ignore_public_acls      = true
-  restrict_public_buckets = true
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
 }
 
 resource "aws_s3_bucket_policy" "strapie_uploads_public_policy" {
@@ -1166,18 +1157,11 @@ resource "aws_s3_bucket_policy" "strapie_uploads_public_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowCloudFrontServicePrincipalReadOnly"
+        Sid       = "PublicReadGetObject"
         Effect    = "Allow"
-        Principal = {
-          Service = "cloudfront.amazonaws.com"
-        }
+        Principal = "*"
         Action    = "s3:GetObject"
         Resource  = "${aws_s3_bucket.strapie_uploads.arn}/*"
-        Condition = {
-          StringEquals = {
-            "AWS:SourceArn" = module.cloudfront_strapie.cloudfront_distribution_arn
-          }
-        }
       }
     ]
   })

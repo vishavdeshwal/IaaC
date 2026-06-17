@@ -68,6 +68,10 @@ resource "aws_rds_cluster_instance" "aurora" {
     engine_version      = aws_rds_cluster.aurora.engine_version
     apply_immediately   = var.apply_immediately
 
+    performance_insights_enabled          = var.performance_insights_enabled
+    performance_insights_retention_period = var.performance_insights_retention_period
+    performance_insights_kms_key_id       = var.performance_insights_kms_key_id
+
     tags = {
         Name        = "${var.environment}-${var.project}-${var.cluster_identifier}-${count.index}"
         Environment = var.environment
