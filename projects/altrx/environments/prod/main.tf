@@ -24,7 +24,7 @@ provider "aws" {
 
 
 module "vpc" {
-  source               = "../../../../modules/vpc"
+  source               = "../../../../modules/aws/vpc"
   vpc_cidr             = var.vpc_cidr
   instance_tenancy     = var.instance_tenancy
   enable_dns_hostnames = var.enable_dns_hostnames
@@ -34,7 +34,7 @@ module "vpc" {
 }
 
 module "subnets" {
-  source          = "../../../../modules/subnets"
+  source          = "../../../../modules/aws/subnets"
   vpc_id          = module.vpc.vpc_id
   public_subnets  = var.public_subnets
   private_subnets = var.private_subnets
@@ -43,7 +43,7 @@ module "subnets" {
 }
 
 module "igw" {
-  source      = "../../../../modules/igw"
+  source      = "../../../../modules/aws/igw"
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
   project     = var.project
@@ -55,7 +55,7 @@ module "igw" {
 # =============================================================
 
 module "prod_redis_sg" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   name          = "redis"
   vpc_id        = module.vpc.vpc_id
   environment   = var.environment
@@ -83,7 +83,7 @@ module "prod_redis_sg" {
 }
 
 module "prod_alb_sg" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   name          = "alb"
   vpc_id        = module.vpc.vpc_id
   environment   = var.environment
@@ -149,7 +149,7 @@ resource "aws_security_group" "default" {
 }
 
 module "prod_be_sg" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   name          = "be"
   vpc_id        = module.vpc.vpc_id
   environment   = var.environment
@@ -177,7 +177,7 @@ module "prod_be_sg" {
 }
 
 module "prod_worker_sg" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   name          = "worker"
   vpc_id        = module.vpc.vpc_id
   environment   = var.environment
@@ -198,7 +198,7 @@ module "prod_worker_sg" {
 }
 
 module "prod_wordpress_sg" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   name          = "wordpress"
   vpc_id        = module.vpc.vpc_id
   environment   = var.environment
@@ -245,7 +245,7 @@ module "prod_wordpress_sg" {
 # =============================================================
 
 module "prod_redis" {
-  source                     = "../../../../modules/elasticache"
+  source                     = "../../../../modules/aws/elasticache"
   name                       = "redis"
   engine                     = "redis"
   node_type                  = "cache.t3.small"
@@ -266,7 +266,7 @@ module "prod_redis" {
 }
 
 module "dynamodb_payment_events_log" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "production_altrx-payment-events-log"
   hash_key     = "event_id"
   range_key    = "received_at"
@@ -280,7 +280,7 @@ module "dynamodb_payment_events_log" {
 }
 
 module "dynamodb_processed_events" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "production_altrx-processed-events"
   hash_key     = "event_id"
   billing_mode = "PAY_PER_REQUEST"
@@ -292,7 +292,7 @@ module "dynamodb_processed_events" {
 }
 
 module "dynamodb_stripe_customers" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "production_altrx-stripe-customers"
   hash_key     = "stripe_customer_id"
   billing_mode = "PAY_PER_REQUEST"
@@ -314,7 +314,7 @@ module "dynamodb_stripe_customers" {
 }
 
 module "dynamodb_checkout_submissions" {
-  source                      = "../../../../modules/dynamodb"
+  source                      = "../../../../modules/aws/dynamodb"
   name                        = "production_altrx-checkout-submissions"
   hash_key                    = "submission_token"
   billing_mode                = "PAY_PER_REQUEST"
@@ -335,7 +335,7 @@ module "dynamodb_checkout_submissions" {
 }
 
 module "dynamodb_weight_logs" {
-  source                      = "../../../../modules/dynamodb"
+  source                      = "../../../../modules/aws/dynamodb"
   name                        = "production_altrx-weight-logs"
   hash_key                    = "user_id"
   range_key                   = "log_date"
@@ -364,7 +364,7 @@ module "dynamodb_weight_logs" {
 # =============================================================
 
 module "prod_target_group" {
-  source                = "../../../../modules/target_group"
+  source                = "../../../../modules/aws/target_group"
   name                  = "backend"
   port                  = 8000
   protocol              = "HTTP"
@@ -385,7 +385,7 @@ module "prod_target_group" {
 }
 
 module "prod_alb" {
-  source                     = "../../../../modules/alb"
+  source                     = "../../../../modules/aws/alb"
   name                       = "alb"
   internal                   = false
   security_group_ids         = [module.prod_alb_sg.security_group_id]
@@ -410,7 +410,7 @@ module "prod_alb" {
 # =============================================================
 
 module "prod_payment_events_dlq" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "payment-events-dlq"
   environment                = var.environment
   project                    = var.project
@@ -423,7 +423,7 @@ module "prod_payment_events_dlq" {
 }
 
 module "prod_payment_events" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "payment-events"
   environment                = var.environment
   project                    = var.project
@@ -451,7 +451,7 @@ module "prod_payment_events" {
 }
 
 module "prod_reconciler_trigger_dlq" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "reconciler-trigger-dlq"
   environment                = var.environment
   project                    = var.project
@@ -477,7 +477,7 @@ module "prod_reconciler_trigger_dlq" {
 }
 
 module "prod_reconciler_trigger" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "reconciler-trigger"
   environment                = var.environment
   project                    = var.project
@@ -596,7 +596,7 @@ resource "aws_iam_policy" "ecs_s3_env_policy" {
 }
 
 module "iam_ecs_task_execution_role" {
-  source      = "../../../../modules/iam_role"
+  source      = "../../../../modules/aws/iam_role"
   name        = "ECS-Task-execution-role"
   environment = var.environment
   project     = var.project
@@ -678,7 +678,7 @@ resource "aws_iam_role_policy_attachment" "ecs_dynamodb_sqs_attachment" {
 
 
 module "iam_altrx_ssm_role" {
-  source = "../../../../modules/iam_role"
+  source = "../../../../modules/aws/iam_role"
   name   = "altrx_ssm_role"
   # This role is also managed by staging (module.iam_strapie_server_role) since
   # IAM role names are account-global. Use a shared tag value so both
@@ -733,7 +733,7 @@ resource "aws_iam_policy" "altrx_reconciler_policy" {
 # =============================================================
 
 module "ecr_prod_worker" {
-  source               = "../../../../modules/ecr"
+  source               = "../../../../modules/aws/ecr"
   name                 = "worker"
   environment          = var.environment
   project              = var.project
@@ -743,7 +743,7 @@ module "ecr_prod_worker" {
 }
 
 module "ecs_cluster" {
-  source                    = "../../../../modules/ecs_cluster"
+  source                    = "../../../../modules/aws/ecs_cluster"
   cluster_name              = "Prod-Altrx"
   enable_container_insights = true
   environment               = var.environment
@@ -761,7 +761,7 @@ data "aws_ecs_task_definition" "prod_worker_payment" {
 }
 
 module "ecs_backend_service" {
-  source                       = "../../../../modules/ecs_service"
+  source                       = "../../../../modules/aws/ecs_service"
   service_name                 = "Prod-Backend"
   family                       = "prod-backend"
   cluster_arn                  = module.ecs_cluster.cluster_arn
@@ -825,7 +825,7 @@ module "ecs_backend_service" {
 }
 
 module "lambda_reconciler" {
-  source                 = "../../../../modules/lambda"
+  source                 = "../../../../modules/aws/lambda"
   function_name          = "reconciler"
   environment            = var.environment
   project                = var.project
@@ -841,7 +841,7 @@ module "lambda_reconciler" {
 }
 
 module "ecr_reconciler" {
-  source               = "../../../../modules/ecr"
+  source               = "../../../../modules/aws/ecr"
   name                 = "reconciler"
   environment          = var.environment
   project              = var.project
@@ -851,7 +851,7 @@ module "ecr_reconciler" {
 }
 
 module "ecs_worker_service" {
-  source                       = "../../../../modules/ecs_service"
+  source                       = "../../../../modules/aws/ecs_service"
   service_name                 = "Prod-Worker-Payment"
   family                       = "Prod-Worker-Payment"
   cluster_arn                  = module.ecs_cluster.cluster_arn
@@ -907,7 +907,7 @@ module "ecs_worker_service" {
 }
 
 module "ecr_prod_backend" {
-  source               = "../../../../modules/ecr"
+  source               = "../../../../modules/aws/ecr"
   name                 = "backend"
   environment          = var.environment
   project              = var.project
@@ -956,7 +956,7 @@ resource "aws_s3_bucket_cors_configuration" "uploads_cors" {
 
 # 1. EC2 Security Group (Using modules/security_groups)
 module "sg_strapie" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   vpc_id        = module.vpc.vpc_id
   name          = "strapie"
   name_override = "Prod-Strapie-SG"
@@ -1005,7 +1005,7 @@ module "sg_strapie" {
 
 # 2. Database Security Group (Using modules/security_groups)
 module "sg_strapie_db" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   vpc_id        = module.vpc.vpc_id
   name          = "strapie-db"
   name_override = "Prod-Strapie-DB-SG"
@@ -1038,7 +1038,7 @@ module "sg_strapie_db" {
 
 # 3 & 4. Database Subnet Group & DB Instance (Using modules/rds)
 module "prod_strapie_db" {
-  source                = "../../../../modules/rds"
+  source                = "../../../../modules/aws/rds"
   identifier            = "strapie-db"
   allocated_storage     = 100
   max_allocated_storage = 1000
@@ -1072,7 +1072,7 @@ resource "aws_iam_instance_profile" "strapie_profile" {
 
 # 5.1 Production Strapie EC2 Server (Using modules/ec2)
 module "production_strapie_server" {
-  source                = "../../../../modules/ec2"
+  source                = "../../../../modules/aws/ec2"
   name                  = "strapie"
   name_override         = "Prod-Strapie-Server"
   ami_id                = "ami-091138d0f0d41ff90"
@@ -1090,7 +1090,7 @@ module "production_strapie_server" {
 
 # 5.2 Elastic IP for Strapie Server (Using modules/eip)
 module "production_strapie_eip" {
-  source        = "../../../../modules/eip"
+  source        = "../../../../modules/aws/eip"
   environment   = var.environment
   project       = var.project
   name          = "strapie-eip"
@@ -1112,7 +1112,7 @@ resource "aws_s3_bucket" "strapie_uploads" {
 
 # 7. IAM Policy & Attachment (Using modules/iam_policy)
 module "strapie_s3_policy" {
-  source      = "../../../../modules/iam_policy"
+  source      = "../../../../modules/aws/iam_policy"
   name        = "${var.environment}-${var.project}-strapie-s3-access"
   description = "Allows Production Strapie Server to access its dedicated S3 bucket"
   policy      = jsonencode({

@@ -25,7 +25,7 @@ provider "aws" {
 # Network Modules (VPC, Subnets, Internet Gateway)
 # =============================================================
 module "vpc" {
-  source               = "../../../../modules/vpc"
+  source               = "../../../../modules/aws/vpc"
   vpc_cidr             = var.vpc_cidr
   instance_tenancy     = var.instance_tenancy
   enable_dns_hostnames = var.enable_dns_hostnames
@@ -35,7 +35,7 @@ module "vpc" {
 }
 
 module "subnets" {
-  source          = "../../../../modules/subnets"
+  source          = "../../../../modules/aws/subnets"
   vpc_id          = module.vpc.vpc_id
   public_subnets  = var.public_subnets
   private_subnets = var.private_subnets
@@ -43,20 +43,20 @@ module "subnets" {
   project         = var.project
 }
 module "igw" {
-  source      = "../../../../modules/igw"
+  source      = "../../../../modules/aws/igw"
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
   project     = var.project
 }
 
 module "eip" {
-  source      = "../../../../modules/eip"
+  source      = "../../../../modules/aws/eip"
   environment = var.environment
   project     = var.project
 }
 
 module "nat_gateway" {
-  source            = "../../../../modules/nat_gateway"
+  source            = "../../../../modules/aws/nat_gateway"
   eip_allocation_id = module.eip.eip_allocation_id
   public_subnet_id  = module.subnets.public_subnet_ids["public1"]
   environment       = var.environment
@@ -65,7 +65,7 @@ module "nat_gateway" {
 }
 
 module "route_tables" {
-  source         = "../../../../modules/route_tables"
+  source         = "../../../../modules/aws/route_tables"
   vpc_id         = module.vpc.vpc_id
   igw_id         = module.igw.igw_id
   nat_gateway_id = module.nat_gateway.nat_gateway_id
@@ -74,7 +74,7 @@ module "route_tables" {
 }
 
 module "route_table_association" {
-  source                 = "../../../../modules/route_table_association"
+  source                 = "../../../../modules/aws/route_table_association"
   public_subnet_ids      = module.subnets.public_subnet_ids
   private_subnet_ids     = module.subnets.private_subnet_ids
   public_route_table_id  = module.route_tables.public_route_table_id
@@ -86,7 +86,7 @@ module "route_table_association" {
 # Isolated Security Groups for Staging
 # =============================================================
 module "staging_redis_sg" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   name          = "redis"
   vpc_id        = module.vpc.vpc_id
   environment   = var.environment
@@ -114,7 +114,7 @@ module "staging_redis_sg" {
 }
 
 module "staging_alb_sg" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   name          = "alb"
   vpc_id        = module.vpc.vpc_id
   environment   = var.environment
@@ -149,7 +149,7 @@ module "staging_alb_sg" {
 }
 
 module "staging_be_sg" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   name          = "be"
   vpc_id        = module.vpc.vpc_id
   environment   = var.environment
@@ -177,7 +177,7 @@ module "staging_be_sg" {
 }
 
 module "staging_worker_sg" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   name          = "worker"
   vpc_id        = module.vpc.vpc_id
   environment   = var.environment
@@ -198,7 +198,7 @@ module "staging_worker_sg" {
 }
 
 module "staging_wordpress_sg" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   name          = "wordpress"
   vpc_id        = module.vpc.vpc_id
   environment   = var.environment
@@ -240,7 +240,7 @@ module "staging_wordpress_sg" {
 }
 
 module "staging_bastion_sg" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   name          = "bastion"
   vpc_id        = module.vpc.vpc_id
   environment   = var.environment
@@ -273,7 +273,7 @@ resource "aws_iam_instance_profile" "bastion_profile" {
 }
 
 module "staging_bastion" {
-  source               = "../../../../modules/ec2"
+  source               = "../../../../modules/aws/ec2"
   name                 = "bastion"
   ami_id               = "ami-0c7217cdde317cfec" # Amazon Linux 2023 AMI in us-east-1
   instance_type        = "t3.micro"
@@ -291,7 +291,7 @@ module "staging_bastion" {
 # Consolidated Databases (DynamoDB & Redis)
 # =============================================================
 module "staging_redis" {
-  source                     = "../../../../modules/elasticache"
+  source                     = "../../../../modules/aws/elasticache"
   name                       = "redis"
   engine                     = "redis"
   node_type                  = "cache.t3.small"
@@ -312,7 +312,7 @@ module "staging_redis" {
 }
 
 module "dynamodb_payment_events_log" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "staging_altrx-payment-events-log"
   hash_key     = "event_id"
   range_key    = "received_at"
@@ -326,7 +326,7 @@ module "dynamodb_payment_events_log" {
 }
 
 module "dynamodb_processed_events" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "staging_altrx-processed-events"
   hash_key     = "event_id"
   billing_mode = "PAY_PER_REQUEST"
@@ -338,7 +338,7 @@ module "dynamodb_processed_events" {
 }
 
 module "dynamodb_stripe_customers" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "staging_altrx-stripe-customers"
   hash_key     = "stripe_customer_id"
   billing_mode = "PAY_PER_REQUEST"
@@ -360,7 +360,7 @@ module "dynamodb_stripe_customers" {
 }
 
 module "dynamodb_checkout_submissions" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "staging_altrx-checkout-submissions"
   hash_key     = "submission_token"
   billing_mode = "PAY_PER_REQUEST"
@@ -380,7 +380,7 @@ module "dynamodb_checkout_submissions" {
 }
 
 module "dynamodb_weight_logs" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "staging_altrx-weight-logs"
   hash_key     = "user_id"
   range_key    = "log_date"
@@ -405,7 +405,7 @@ module "dynamodb_weight_logs" {
 # Consolidated Load Balancing (ALB, Listeners, Target Groups)
 # =============================================================
 module "staging_target_group" {
-  source                = "../../../../modules/target_group"
+  source                = "../../../../modules/aws/target_group"
   name                  = "backend"
   port                  = 8000
   protocol              = "HTTP"
@@ -426,7 +426,7 @@ module "staging_target_group" {
 }
 
 module "staging_alb" {
-  source                     = "../../../../modules/alb"
+  source                     = "../../../../modules/aws/alb"
   name                       = "alb"
   internal                   = false
   security_group_ids         = [module.staging_alb_sg.security_group_id]
@@ -449,7 +449,7 @@ module "staging_alb" {
 # Consolidated SQS Queues
 # =============================================================
 module "staging_payment_events_dlq" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "payment-events-dlq"
   environment                = var.environment
   project                    = var.project
@@ -462,7 +462,7 @@ module "staging_payment_events_dlq" {
 }
 
 module "staging_payment_events" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "payment-events"
   environment                = var.environment
   project                    = var.project
@@ -490,7 +490,7 @@ module "staging_payment_events" {
 }
 
 module "reconciler_trigger_dlq" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "reconciler-trigger-dlq"
   environment                = var.environment
   project                    = var.project
@@ -516,7 +516,7 @@ module "reconciler_trigger_dlq" {
 }
 
 module "reconciler_trigger" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "reconciler-trigger"
   environment                = var.environment
   project                    = var.project
@@ -548,7 +548,7 @@ module "reconciler_trigger" {
 # Consolidated CloudWatch Logging Groups
 # =============================================================
 module "staging_worker_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "/ecs/staging-worker"
   retention_in_days = 7
   tags = {
@@ -559,7 +559,7 @@ module "staging_worker_log_group" {
 }
 
 module "staging_reconciler_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "/aws/lambda/altrx-reconciler-staging"
   retention_in_days = 7
   tags = {
@@ -570,7 +570,7 @@ module "staging_reconciler_log_group" {
 }
 
 module "staging_redis_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "redis-staging"
   retention_in_days = 7
   tags = {
@@ -581,7 +581,7 @@ module "staging_redis_log_group" {
 }
 
 module "staging_backend_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "/ecs/staging-backend"
   retention_in_days = 7
   tags = {
@@ -592,7 +592,7 @@ module "staging_backend_log_group" {
 }
 
 module "staging_ecs_performance_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "/aws/ecs/containerinsights/Staging-Altrx/performance"
   retention_in_days = 1
   tags = {
@@ -603,7 +603,7 @@ module "staging_ecs_performance_log_group" {
 }
 
 module "staging_worker_payment_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "/ecs/Staging-Worker-Payment"
   retention_in_days = 7
   tags = {
@@ -631,7 +631,7 @@ data "aws_iam_policy_document" "ecs_s3_env_policy_doc" {
 }
 
 module "iam_ecs_s3_env_policy" {
-  source      = "../../../../modules/iam_policy"
+  source      = "../../../../modules/aws/iam_policy"
   name        = "${var.environment}-ecs-s3-env-policy"
   role_name   = module.iam_ecs_task_execution_role.role_name
   is_inline   = false
@@ -641,7 +641,7 @@ module "iam_ecs_s3_env_policy" {
 }
 
 module "iam_ecs_task_execution_role" {
-  source      = "../../../../modules/iam_role"
+  source      = "../../../../modules/aws/iam_role"
   name        = "ECS-Task-execution-role-staging"
   environment = var.environment
   project     = var.project
@@ -669,7 +669,7 @@ module "iam_ecs_task_execution_role" {
 }
 
 module "iam_altrx_ssm_role" {
-  source      = "../../../../modules/iam_role"
+  source      = "../../../../modules/aws/iam_role"
   name        = "altrx_ssm_role_staging"
   environment = var.environment
   project     = var.project
@@ -719,7 +719,7 @@ data "aws_iam_policy_document" "altrx_reconciler_policy_doc" {
 }
 
 module "iam_altrx_reconciler_policy" {
-  source      = "../../../../modules/iam_policy"
+  source      = "../../../../modules/aws/iam_policy"
   name        = "AltrxReconcilerPolicy-staging"
   is_inline   = false
   policy      = data.aws_iam_policy_document.altrx_reconciler_policy_doc.json
@@ -734,7 +734,7 @@ module "iam_altrx_reconciler_policy" {
 # -------
 
 module "iam_worker_execution_role" {
-  source      = "../../../../modules/iam_role"
+  source      = "../../../../modules/aws/iam_role"
   name        = "staging_altrx-payment-worker-execution-role"
   description = "Execution role for v3 payment worker (ECR pull + secret valueFrom)"
   assume_role_policy = jsonencode({
@@ -769,7 +769,7 @@ data "aws_iam_policy_document" "worker_execution_policy_doc" {
 }
 
 module "iam_worker_execution_inline" {
-  source      = "../../../../modules/iam_policy"
+  source      = "../../../../modules/aws/iam_policy"
   name        = "worker-execution-inline"
   role_name   = module.iam_worker_execution_role.role_id
   is_inline   = true
@@ -779,7 +779,7 @@ module "iam_worker_execution_inline" {
 }
 
 module "iam_worker_task_role" {
-  source      = "../../../../modules/iam_role"
+  source      = "../../../../modules/aws/iam_role"
   name        = "staging_altrx-payment-worker-task-role"
   description = "Task role for v3 payment worker (DDB+SQS+Secrets+Logs)"
   assume_role_policy = jsonencode({
@@ -824,7 +824,7 @@ data "aws_iam_policy_document" "worker_task_policy_doc" {
 }
 
 module "iam_worker_task_inline" {
-  source      = "../../../../modules/iam_policy"
+  source      = "../../../../modules/aws/iam_policy"
   name        = "worker-task-inline"
   role_name   = module.iam_worker_task_role.role_id
   is_inline   = true
@@ -838,7 +838,7 @@ module "iam_worker_task_inline" {
 # Consolidated Compute (ECS, Lambda, Amplify, ECR)
 # =============================================================
 module "ecr_staging_worker" {
-  source               = "../../../../modules/ecr"
+  source               = "../../../../modules/aws/ecr"
   name                 = "worker"
   environment          = var.environment
   project              = var.project
@@ -848,7 +848,7 @@ module "ecr_staging_worker" {
 }
 
 module "ecs_cluster" {
-  source                    = "../../../../modules/ecs_cluster"
+  source                    = "../../../../modules/aws/ecs_cluster"
   cluster_name              = "Staging-Altrx"
   enable_container_insights = false
   environment               = var.environment
@@ -866,7 +866,7 @@ data "aws_ecs_task_definition" "staging_worker_payment" {
 }
 
 module "ecs_backend_service" {
-  source                            = "../../../../modules/ecs_service"
+  source                            = "../../../../modules/aws/ecs_service"
   service_name                      = "Staging-Backend"
   family                            = "staging-backend"
   cluster_arn                       = module.ecs_cluster.cluster_arn
@@ -926,7 +926,7 @@ module "ecs_backend_service" {
 }
 
 module "lambda_reconciler" {
-  source                 = "../../../../modules/lambda"
+  source                 = "../../../../modules/aws/lambda"
   function_name          = "reconciler"
   environment            = var.environment
   project                = var.project
@@ -942,7 +942,7 @@ module "lambda_reconciler" {
 }
 
 module "ecr_reconciler" {
-  source               = "../../../../modules/ecr"
+  source               = "../../../../modules/aws/ecr"
   name                 = "reconciler"
   environment          = var.environment
   project              = var.project
@@ -952,7 +952,7 @@ module "ecr_reconciler" {
 }
 
 module "ecs_worker_service" {
-  source                       = "../../../../modules/ecs_service"
+  source                       = "../../../../modules/aws/ecs_service"
   service_name                 = "Staging-Worker-Payment"
   family                       = "staging_altrx-payment-worker"
   cluster_arn                  = module.ecs_cluster.cluster_arn
@@ -1003,7 +1003,7 @@ module "ecs_worker_service" {
 }
 
 module "ecr_staging_backend" {
-  source               = "../../../../modules/ecr"
+  source               = "../../../../modules/aws/ecr"
   name                 = "backend"
   environment          = var.environment
   project              = var.project
@@ -1047,7 +1047,7 @@ resource "aws_s3_bucket_cors_configuration" "uploads_cors" {
 
 # 1. EC2 Security Group (Using modules/security_groups)
 module "sg_strapie" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   vpc_id        = module.vpc.vpc_id
   name          = "strapie"
   name_override = "strapie-sg"
@@ -1080,7 +1080,7 @@ module "sg_strapie" {
 
 # 2. Database Security Group (Using modules/security_groups)
 module "sg_strapie_db" {
-  source        = "../../../../modules/security_groups"
+  source        = "../../../../modules/aws/security_groups"
   vpc_id        = module.vpc.vpc_id
   name          = "strapie-db"
   name_override = "strapie-db-sg"
@@ -1170,7 +1170,7 @@ resource "aws_db_instance" "strapie_db" {
 
 # 5. EC2 Server IAM Role (Using modules/iam_role)
 module "iam_strapie_server_role" {
-  source = "../../../../modules/iam_role"
+  source = "../../../../modules/aws/iam_role"
   name   = "altrx_ssm_role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -1199,7 +1199,7 @@ resource "aws_iam_instance_profile" "strapie_profile" {
 }
 
 module "staging_strapie_server" {
-  source                = "../../../../modules/ec2"
+  source                = "../../../../modules/aws/ec2"
   name                  = "strapie"
   name_override         = "Staging-Strapie-Server"
   ami_id                = "ami-091138d0f0d41ff90"
@@ -1216,7 +1216,7 @@ module "staging_strapie_server" {
 }
 
 module "staging_strapie_eip" {
-  source        = "../../../../modules/eip"
+  source        = "../../../../modules/aws/eip"
   environment   = var.environment
   project       = var.project
   name          = "strapie-eip"
@@ -1237,7 +1237,7 @@ resource "aws_s3_bucket" "strapie_uploads" {
 
 # 6.1 CloudFront Distribution for strapie Uploads S3 bucket
 module "cloudfront_strapie" {
-  source                         = "../../../../modules/cloudfront"
+  source                         = "../../../../modules/aws/cloudfront"
   s3_bucket_id                   = aws_s3_bucket.strapie_uploads.id
   s3_bucket_regional_domain_name = aws_s3_bucket.strapie_uploads.bucket_regional_domain_name
   environment                    = var.environment

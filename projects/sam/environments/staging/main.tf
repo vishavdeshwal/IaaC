@@ -22,7 +22,7 @@ provider "aws" {
 }
 
 module "vpc" {
-    source = "../../../../modules/vpc"
+    source = "../../../../modules/aws/vpc"
     vpc_cidr = var.vpc_cidr
     instance_tenancy = var.instance_tenancy
     enable_dns_hostnames = var.enable_dns_hostnames
@@ -32,7 +32,7 @@ module "vpc" {
 }
 
 module "subnets" {
-    source = "../../../../modules/subnets"
+    source = "../../../../modules/aws/subnets"
     vpc_id = module.vpc.vpc_id
     public_subnets = var.public_subnets
     private_subnets = var.private_subnets
@@ -41,20 +41,20 @@ module "subnets" {
 }
 
 module "igw" {
-    source = "../../../../modules/igw"
+    source = "../../../../modules/aws/igw"
     vpc_id = module.vpc.vpc_id
     environment = var.environment
     project = var.project
 }
 
 module "eip" {
-    source = "../../../../modules/eip"
+    source = "../../../../modules/aws/eip"
     environment = var.environment
     project = var.project
 }
 
 module "nat_gateway" {
-    source = "../../../../modules/nat_gateway"
+    source = "../../../../modules/aws/nat_gateway"
     eip_allocation_id = module.eip.eip_allocation_id
     public_subnet_id = module.subnets.public_subnet_ids["public-1"]
     igw_dependency = module.igw.igw_id
@@ -63,7 +63,7 @@ module "nat_gateway" {
 }
 
 module "route_tables" {
-    source = "../../../../modules/route_tables"
+    source = "../../../../modules/aws/route_tables"
     vpc_id = module.vpc.vpc_id
     igw_id = module.igw.igw_id
     nat_gateway_id = module.nat_gateway.nat_gateway_id
@@ -72,7 +72,7 @@ module "route_tables" {
 }
 
 module "route_table_association" {
-    source = "../../../../modules/route_table_association"
+    source = "../../../../modules/aws/route_table_association"
     public_subnet_ids = module.subnets.public_subnet_ids
     private_subnet_ids = module.subnets.private_subnet_ids
     public_route_table_id = module.route_tables.public_route_table_id
@@ -83,7 +83,7 @@ module "route_table_association" {
 
 // --------- Security Groups ------------------
 module "alb_sg" {
-    source = "../../../../modules/security_groups"
+    source = "../../../../modules/aws/security_groups"
     name = "abl"
     vpc_id = module.vpc.vpc_id
     environment = var.environment
@@ -119,7 +119,7 @@ module "alb_sg" {
 }
 
 module "app_sg" {
-    source = "../../../../modules/security_groups"
+    source = "../../../../modules/aws/security_groups"
 
     name = "app"
     vpc_id = module.vpc.vpc_id
@@ -155,7 +155,7 @@ module "app_sg" {
 }
 
 module "redis-sg" {
-    source = "../../../../modules/security_groups"
+    source = "../../../../modules/aws/security_groups"
     name = "redis"
     vpc_id = module.vpc.vpc_id
     environment = var.environment
@@ -188,7 +188,7 @@ module "redis-sg" {
 }
 
 module "db-sg" {
-    source = "../../../../modules/security_groups"
+    source = "../../../../modules/aws/security_groups"
 
     name = "aurora"
     vpc_id = module.vpc.vpc_id
@@ -233,7 +233,7 @@ module "db-sg" {
 }
 
 module "bastion_sg" {
-    source = "../../../../modules/security_groups"
+    source = "../../../../modules/aws/security_groups"
     name = "bastion"
     vpc_id = module.vpc.vpc_id
     environment = var.environment
@@ -264,7 +264,7 @@ module "bastion_sg" {
 // SQS_DQL and SQS Queue
 
 module "sqs_dlq" {
-    source = "../../../../modules/sqs"
+    source = "../../../../modules/aws/sqs"
     name = "app-dlq"
     environment = var.environment
     project = var.project
@@ -272,7 +272,7 @@ module "sqs_dlq" {
 
 
 module "sqs" {
-    source = "../../../../modules/sqs"
+    source = "../../../../modules/aws/sqs"
     name = "app-queue"
     environment = var.environment
     project = var.project
@@ -281,7 +281,7 @@ module "sqs" {
 }
 
 module "sqs_delay" {
-    source = "../../../../modules/sqs"
+    source = "../../../../modules/aws/sqs"
     name = "app-delay-queue"
     environment = var.environment
     project = var.project
@@ -291,7 +291,7 @@ module "sqs_delay" {
 }
 
 module "sqs_delay_dlq" {
-    source = "../../../../modules/sqs"
+    source = "../../../../modules/aws/sqs"
     name = "app-delay-dlq"
     environment = var.environment
     project = var.project
@@ -304,7 +304,7 @@ module "sqs_delay_dlq" {
 // Aurora Serverless v2 ----------
 
 module "aurora" {
-    source = "../../../../modules/aurora"
+    source = "../../../../modules/aws/aurora"
     cluster_identifier = "aurora-db"
     
     # Enable Serverless v2
@@ -333,7 +333,7 @@ module "aurora" {
 
 // --------- Redis ----------
 module "redis" {
-    source = "../../../../modules/elasticache"
+    source = "../../../../modules/aws/elasticache"
     name = "cache"
     engine = "redis"
     node_type = "cache.t3.micro"
@@ -361,7 +361,7 @@ module "redis" {
 # 1. Target Group (Routing destination for Fargate containers)
 
 module "target_group" {
-    source = "../../../../modules/target_group"
+    source = "../../../../modules/aws/target_group"
     name = "app-tg-8080"
     port = 8080
     protocol = "HTTP"
@@ -375,7 +375,7 @@ module "target_group" {
 # 2 Application Load Balancer (Receives web traffic)
 
 module "alb" {
-    source = "../../../../modules/alb"
+    source = "../../../../modules/aws/alb"
     name = "app-alb"
     internal = false
     security_group_ids = [
@@ -403,7 +403,7 @@ module "alb" {
 # ECS Fargate Cluster & Service
 
 module "ecs_fargate" {
-    source = "../../../../modules/ecs_fargate"
+    source = "../../../../modules/aws/ecs_fargate"
     cluster_name = "app-sammmm"
     service_name = "sammmm-webhook"
     task_family = "sammmm-webhook-task"
@@ -461,7 +461,7 @@ module "ecs_fargate" {
 }
 
 module "ecr" {
-    source = "../../../../modules/ecr"
+    source = "../../../../modules/aws/ecr"
     name = "sammmm-backend"
     environment = var.environment
     project = var.project
@@ -475,7 +475,7 @@ module "ecr" {
 // =============================================================
 
 module "secret_database_url" {
-  source        = "../../../../modules/secrets_manager"
+  source        = "../../../../modules/aws/secrets_manager"
   secret_name   = "${var.environment}/${var.project}/DATABASE_URL"
   secret_string = "postgresql://${var.master_db_user_name}:${var.master_db_user_pass}@${module.aurora.cluster_endpoint}:5432/stg_app_db"
   environment   = var.environment
@@ -484,7 +484,7 @@ module "secret_database_url" {
 
 
 module "secret_gupshup_hmac_secret" {
-  source        = "../../../../modules/secrets_manager"
+  source        = "../../../../modules/aws/secrets_manager"
   secret_name   = "${var.environment}/${var.project}/GUPSHUP_HMAC_SECRET"
   secret_string = var.secret_gupshup_hmac_secret
   environment   = var.environment
@@ -493,7 +493,7 @@ module "secret_gupshup_hmac_secret" {
 
 
 module "secret_gupshup_token" {
-  source        = "../../../../modules/secrets_manager"
+  source        = "../../../../modules/aws/secrets_manager"
   secret_name   = "${var.environment}/${var.project}/GUPSHUP_TOKEN"
   secret_string = var.secret_gupshup_token
   environment   = var.environment
@@ -501,7 +501,7 @@ module "secret_gupshup_token" {
 }
 
 module "secret_clevertap_passcode" {
-  source        = "../../../../modules/secrets_manager"
+  source        = "../../../../modules/aws/secrets_manager"
   secret_name   = "${var.environment}/${var.project}/CLEVERTAP_PASSCODE"
   secret_string = var.secret_clevertap_passcode
   environment   = var.environment
@@ -610,7 +610,7 @@ resource "aws_iam_policy" "webhook_policy" {
 }
 
 module "webhook_role" {
-  source             = "../../../../modules/iam_role"
+  source             = "../../../../modules/aws/iam_role"
   name               = "${var.environment}-${var.project}-webhook-role"
   assume_role_policy = local.ecs_task_assume_role_policy
   policy_arns        = []
@@ -655,7 +655,7 @@ resource "aws_iam_policy" "ingest_policy" {
 }
 
 module "ingest_role" {
-  source             = "../../../../modules/iam_role"
+  source             = "../../../../modules/aws/iam_role"
   name               = "${var.environment}-${var.project}-ingest-role"
   assume_role_policy = local.ecs_task_assume_role_policy
   policy_arns        = []
@@ -696,7 +696,7 @@ resource "aws_iam_policy" "flush_policy" {
 }
 
 module "flush_role" {
-  source             = "../../../../modules/iam_role"
+  source             = "../../../../modules/aws/iam_role"
   name               = "${var.environment}-${var.project}-flush-role"
   assume_role_policy = local.ecs_task_assume_role_policy
   policy_arns        = []
@@ -711,7 +711,7 @@ resource "aws_iam_role_policy_attachment" "flush_attachment" {
 
 # 4. ECS Task Execution Role (separate from task role)
 module "ecs_execution_role" {
-  source             = "../../../../modules/iam_role"
+  source             = "../../../../modules/aws/iam_role"
   name               = "${var.environment}-${var.project}-ecs-execution-role"
   assume_role_policy = local.ecs_task_assume_role_policy
   policy_arns        = [
@@ -769,7 +769,7 @@ resource "aws_iam_role_policy_attachment" "fargate_task_webhook" {
 // =============================================================
 
 module "ecs_ingest" {
-  source             = "../../../../modules/ecs_service"
+  source             = "../../../../modules/aws/ecs_service"
   service_name       = "${var.environment}-${var.project}-sammmm-ingest"
   family             = "${var.environment}-${var.project}-sammmm-ingest-task"
   cluster_arn        = module.ecs_fargate.cluster_arn
@@ -817,7 +817,7 @@ module "ecs_ingest" {
 
 
 module "ecs_flush" {
-  source             = "../../../../modules/ecs_service"
+  source             = "../../../../modules/aws/ecs_service"
   service_name       = "${var.environment}-${var.project}-sammmm-flush"
   family             = "${var.environment}-${var.project}-sammmm-flush-task"
   cluster_arn        = module.ecs_fargate.cluster_arn
@@ -872,7 +872,7 @@ data "aws_ssm_parameter" "al2023_ami" {
 }
 
 module "bastion_role" {
-  source             = "../../../../modules/iam_role"
+  source             = "../../../../modules/aws/iam_role"
   name               = "${var.environment}-${var.project}-bastion-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -895,7 +895,7 @@ resource "aws_iam_instance_profile" "bastion_profile" {
 }
 
 module "bastion_host" {
-  source               = "../../../../modules/ec2"
+  source               = "../../../../modules/aws/ec2"
   name                 = "bastion"
   ami_id               = data.aws_ssm_parameter.al2023_ami.value
   instance_type        = "t3.micro"

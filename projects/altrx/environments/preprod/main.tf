@@ -25,7 +25,7 @@ provider "aws" {
 # Network Modules (VPC, Subnets, Internet Gateway)
 # =============================================================
 module "vpc" {
-    source               = "../../../../modules/vpc"
+    source               = "../../../../modules/aws/vpc"
     vpc_cidr             = var.vpc_cidr
     instance_tenancy     = var.instance_tenancy
     enable_dns_hostnames = var.enable_dns_hostnames
@@ -35,7 +35,7 @@ module "vpc" {
 }
 
 module "subnets" {
-    source          = "../../../../modules/subnets"
+    source          = "../../../../modules/aws/subnets"
     vpc_id          = module.vpc.vpc_id
     public_subnets  = var.public_subnets
     private_subnets = var.private_subnets
@@ -43,20 +43,20 @@ module "subnets" {
     project         = var.project
 }
 module "igw" {
-    source      = "../../../../modules/igw"
+    source      = "../../../../modules/aws/igw"
     vpc_id      = module.vpc.vpc_id
     environment = var.environment
     project     = var.project
 }
 
 module "eip" {
-    source      = "../../../../modules/eip"
+    source      = "../../../../modules/aws/eip"
     environment = var.environment
     project     = var.project
 }
 
 module "nat_gateway" {
-    source            = "../../../../modules/nat_gateway"
+    source            = "../../../../modules/aws/nat_gateway"
     eip_allocation_id = module.eip.eip_allocation_id
     public_subnet_id  = module.subnets.public_subnet_ids["public1"]
     environment       = var.environment
@@ -65,7 +65,7 @@ module "nat_gateway" {
 }
 
 module "route_tables" {
-    source         = "../../../../modules/route_tables"
+    source         = "../../../../modules/aws/route_tables"
     vpc_id         = module.vpc.vpc_id
     igw_id         = module.igw.igw_id
     nat_gateway_id = module.nat_gateway.nat_gateway_id
@@ -74,7 +74,7 @@ module "route_tables" {
 }
 
 module "route_table_association" {
-    source                  = "../../../../modules/route_table_association"
+    source                  = "../../../../modules/aws/route_table_association"
     public_subnet_ids       = module.subnets.public_subnet_ids
     private_subnet_ids      = module.subnets.private_subnet_ids
     public_route_table_id   = module.route_tables.public_route_table_id
@@ -85,7 +85,7 @@ module "route_table_association" {
 # Isolated Security Groups for Preprod
 # =============================================================
 module "preprod_redis_sg" {
-  source      = "../../../../modules/security_groups"
+  source      = "../../../../modules/aws/security_groups"
   name        = "redis"
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
@@ -112,7 +112,7 @@ module "preprod_redis_sg" {
 }
 
 module "preprod_alb_sg" {
-  source      = "../../../../modules/security_groups"
+  source      = "../../../../modules/aws/security_groups"
   name        = "alb"
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
@@ -146,7 +146,7 @@ module "preprod_alb_sg" {
 }
 
 module "preprod_be_sg" {
-  source      = "../../../../modules/security_groups"
+  source      = "../../../../modules/aws/security_groups"
   name        = "be"
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
@@ -173,7 +173,7 @@ module "preprod_be_sg" {
 }
 
 module "preprod_worker_sg" {
-  source      = "../../../../modules/security_groups"
+  source      = "../../../../modules/aws/security_groups"
   name        = "worker"
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
@@ -193,7 +193,7 @@ module "preprod_worker_sg" {
 }
 
 module "preprod_wordpress_sg" {
-  source      = "../../../../modules/security_groups"
+  source      = "../../../../modules/aws/security_groups"
   name        = "wordpress"
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
@@ -237,7 +237,7 @@ module "preprod_wordpress_sg" {
 # Consolidated Databases (DynamoDB & Redis)
 # =============================================================
 module "preprod_redis" {
-  source                     = "../../../../modules/elasticache"
+  source                     = "../../../../modules/aws/elasticache"
   name                       = "redis"
   engine                     = "redis"
   node_type                  = "cache.t3.small"
@@ -256,7 +256,7 @@ module "preprod_redis" {
 }
 
 module "dynamodb_payment_events_log" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "${var.environment}_${lower(var.project)}-payment-events-log"
   hash_key     = "event_id"
   range_key    = "received_at"
@@ -270,7 +270,7 @@ module "dynamodb_payment_events_log" {
 }
 
 module "dynamodb_processed_events" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "${var.environment}_${lower(var.project)}-processed-events"
   hash_key     = "event_id"
   billing_mode = "PAY_PER_REQUEST"
@@ -282,7 +282,7 @@ module "dynamodb_processed_events" {
 }
 
 module "dynamodb_stripe_customers" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "${var.environment}_${lower(var.project)}-stripe-customers"
   hash_key     = "stripe_customer_id"
   billing_mode = "PAY_PER_REQUEST"
@@ -304,7 +304,7 @@ module "dynamodb_stripe_customers" {
 }
 
 module "dynamodb_checkout_submissions" {
-  source       = "../../../../modules/dynamodb"
+  source       = "../../../../modules/aws/dynamodb"
   name         = "${var.environment}_${lower(var.project)}-checkout-submissions"
   hash_key     = "submission_token"
   billing_mode = "PAY_PER_REQUEST"
@@ -325,7 +325,7 @@ module "dynamodb_checkout_submissions" {
 
 
 module "dynamodb_weight_logs" {
-  source                      = "../../../../modules/dynamodb"
+  source                      = "../../../../modules/aws/dynamodb"
   name                        = "${var.environment}_${lower(var.project)}-weight-logs"
   hash_key                    = "user_id"
   range_key                   = "log_date"
@@ -351,7 +351,7 @@ module "dynamodb_weight_logs" {
 # Consolidated Load Balancing (ALB, Listeners, Target Groups)
 # =============================================================
 module "preprod_target_group" {
-  source               = "../../../../modules/target_group"
+  source               = "../../../../modules/aws/target_group"
   name                 = "backend"
   port                 = 8000
   protocol             = "HTTP"
@@ -372,7 +372,7 @@ module "preprod_target_group" {
 }
 
 module "preprod_alb" {
-  source               = "../../../../modules/alb"
+  source               = "../../../../modules/aws/alb"
   name                 = "alb"
   internal             = false
   security_group_ids   = [module.preprod_alb_sg.security_group_id]
@@ -395,7 +395,7 @@ module "preprod_alb" {
 # Consolidated SQS Queues
 # =============================================================
 module "preprod_payment_events_dlq" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "payment-events-dlq"
   environment                = var.environment
   project                    = var.project
@@ -408,7 +408,7 @@ module "preprod_payment_events_dlq" {
 }
 
 module "preprod_payment_events" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "payment-events"
   environment                = var.environment
   project                    = var.project
@@ -436,7 +436,7 @@ module "preprod_payment_events" {
 }
 
 module "reconciler_trigger_dlq" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "reconciler-trigger-dlq"
   environment                = var.environment
   project                    = var.project
@@ -462,7 +462,7 @@ module "reconciler_trigger_dlq" {
 }
 
 module "reconciler_trigger" {
-  source                     = "../../../../modules/sqs"
+  source                     = "../../../../modules/aws/sqs"
   name                       = "reconciler-trigger"
   environment                = var.environment
   project                    = var.project
@@ -493,7 +493,7 @@ module "reconciler_trigger" {
 # Consolidated CloudWatch Logging Groups
 # =============================================================
 module "preprod_worker_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "/ecs/${var.environment}-worker"
   retention_in_days = 7
   tags = {
@@ -504,7 +504,7 @@ module "preprod_worker_log_group" {
 }
 
 module "preprod_reconciler_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "/aws/lambda/${lower(var.project)}-reconciler-${var.environment}"
   retention_in_days = 7
   tags = {
@@ -515,7 +515,7 @@ module "preprod_reconciler_log_group" {
 }
 
 module "preprod_redis_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "redis-${var.environment}"
   retention_in_days = 7
   tags = {
@@ -526,7 +526,7 @@ module "preprod_redis_log_group" {
 }
 
 module "preprod_backend_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "/ecs/${var.environment}-backend"
   retention_in_days = 7
   tags = {
@@ -537,7 +537,7 @@ module "preprod_backend_log_group" {
 }
 
 module "preprod_ecs_performance_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "/aws/ecs/containerinsights/${title(var.environment)}-${title(lower(var.project))}/performance"
   retention_in_days = 1
   tags = {
@@ -548,7 +548,7 @@ module "preprod_ecs_performance_log_group" {
 }
 
 module "preprod_worker_payment_log_group" {
-  source            = "../../../../modules/cloudwatch_log_group"
+  source            = "../../../../modules/aws/cloudwatch_log_group"
   name              = "/ecs/${title(var.environment)}-Worker-Payment"
   retention_in_days = 7
   tags = {
@@ -582,7 +582,7 @@ resource "aws_iam_policy" "ecs_s3_env_policy" {
 }
 
 module "iam_ecs_task_execution_role" {
-  source             = "../../../../modules/iam_role"
+  source             = "../../../../modules/aws/iam_role"
   name               = "ECS-Task-execution-role-${var.environment}"
   environment        = var.environment
   project            = var.project
@@ -664,7 +664,7 @@ resource "aws_iam_role_policy_attachment" "ecs_dynamodb_sqs_attachment" {
 
 
 module "iam_altrx_ssm_role" {
-  source             = "../../../../modules/iam_role"
+  source             = "../../../../modules/aws/iam_role"
   name               = "altrx_ssm_role_${var.environment}"
   environment        = var.environment
   project            = var.project
@@ -721,7 +721,7 @@ resource "aws_iam_policy" "altrx_reconciler_policy" {
 # Consolidated Compute (ECS, Lambda, Amplify, ECR)
 # =============================================================
 module "ecr_preprod_worker" {
-  source               = "../../../../modules/ecr"
+  source               = "../../../../modules/aws/ecr"
   name                 = "worker"
   environment          = var.environment
   project              = var.project
@@ -730,7 +730,7 @@ module "ecr_preprod_worker" {
 }
 
 module "ecs_cluster" {
-  source                    = "../../../../modules/ecs_cluster"
+  source                    = "../../../../modules/aws/ecs_cluster"
   cluster_name              = "${title(var.environment)}-${title(var.project)}"
   enable_container_insights = false
   environment               = var.environment
@@ -738,7 +738,7 @@ module "ecs_cluster" {
 }
 
 module "ecs_backend_service" {
-  source                            = "../../../../modules/ecs_service"
+  source                            = "../../../../modules/aws/ecs_service"
   service_name                      = "${title(var.environment)}-Backend"
   family                            = "${var.environment}-backend"
   cluster_arn                       = module.ecs_cluster.cluster_arn
@@ -802,7 +802,7 @@ module "ecs_backend_service" {
 }
 
 module "lambda_reconciler" {
-  source                     = "../../../../modules/lambda"
+  source                     = "../../../../modules/aws/lambda"
   function_name              = "reconciler"
   environment                = var.environment
   project                    = var.project
@@ -816,7 +816,7 @@ module "lambda_reconciler" {
 }
 
 module "ecr_reconciler" {
-  source               = "../../../../modules/ecr"
+  source               = "../../../../modules/aws/ecr"
   name                 = "reconciler"
   environment          = var.environment
   project              = var.project
@@ -825,7 +825,7 @@ module "ecr_reconciler" {
 }
 
 module "ecs_worker_service" {
-  source             = "../../../../modules/ecs_service"
+  source             = "../../../../modules/aws/ecs_service"
   service_name       = "${title(var.environment)}-Worker-Payment"
   family             = "${title(var.environment)}-Worker-Payment"
   cluster_arn        = module.ecs_cluster.cluster_arn
@@ -880,7 +880,7 @@ module "ecs_worker_service" {
 }
 
 module "ecr_preprod_backend" {
-  source               = "../../../../modules/ecr"
+  source               = "../../../../modules/aws/ecr"
   name                 = "backend"
   environment          = var.environment
   project              = var.project
