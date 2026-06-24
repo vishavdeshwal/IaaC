@@ -88,3 +88,30 @@ output "strapie_cloudfront_distribution_id" {
   description = "ID of the CloudFront distribution for Strapi uploads"
 }
 
+output "sqs_cv_case_events_queue_url" {
+  value       = module.cv_case_events.queue_url
+  description = "URL of the cv-case-events SQS Queue"
+}
+
+output "sqs_cv_case_events_dlq_url" {
+  value       = module.cv_case_events_dlq.queue_url
+  description = "URL of the cv-case-events Dead Letter Queue"
+}
+
+output "sqs_cv_case_events_queue_arn" {
+  value       = module.cv_case_events.queue_arn
+  description = "ARN of the cv-case-events SQS Queue"
+}
+
+output "sqs_cv_case_events_dlq_arn" {
+  value       = module.cv_case_events_dlq.queue_arn
+  description = "ARN of the cv-case-events Dead Letter Queue"
+}
+
+output "ecr_staging_cv_case_events_url" {
+  value       = module.ecr_staging_cv_case_events.repository_url
+  description = "URL of the cv-case-events ECR Repository"
+}
+
+
+
