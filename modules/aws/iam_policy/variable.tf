@@ -35,3 +35,10 @@ variable "project" {
   type        = string
   description = "Project name tag"
 }
+
+variable "user_name" {
+  type        = string
+  default     = null
+  description = "The name of the IAM user to associate the policy with."
+}
+

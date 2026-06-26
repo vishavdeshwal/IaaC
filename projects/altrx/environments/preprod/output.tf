@@ -133,4 +133,30 @@ output "security_group_preprod_redis_id" {
   description = "Security Group ID for the preprod Redis cluster"
 }
 
+output "sqs_cv_case_events_queue_url" {
+  value       = module.cv_case_events.queue_url
+  description = "URL of the cv-case-events SQS Queue"
+}
+
+output "sqs_cv_case_events_dlq_url" {
+  value       = module.cv_case_events_dlq.queue_url
+  description = "URL of the cv-case-events Dead Letter Queue"
+}
+
+output "sqs_cv_case_events_queue_arn" {
+  value       = module.cv_case_events.queue_arn
+  description = "ARN of the cv-case-events SQS Queue"
+}
+
+output "sqs_cv_case_events_dlq_arn" {
+  value       = module.cv_case_events_dlq.queue_arn
+  description = "ARN of the cv-case-events Dead Letter Queue"
+}
+
+output "ecr_preprod_cv_case_events_url" {
+  value       = module.ecr_preprod_cv_case_events.repository_url
+  description = "URL of the cv-case-events ECR Repository"
+}
+
+
 

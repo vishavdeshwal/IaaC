@@ -916,3 +916,292 @@ resource "aws_s3_bucket_cors_configuration" "uploads_cors" {
     max_age_seconds = 3000
   }
 }
+
+# =============================================================
+# Consolidated SQS Queues for cv-case-events
+# =============================================================
+module "cv_case_events_dlq" {
+  source                     = "../../../../modules/aws/sqs"
+  name                       = "cv-case-events-dlq"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = var.environment == "prod" ? "cv-case-events-dlq.fifo" : "cv-case-events-dlq-${var.environment}.fifo"
+  fifo_queue                 = true
+  visibility_timeout_seconds = 30
+  message_retention_seconds  = 1209600
+  max_message_size           = 262144
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 0
+  policy = jsonencode({
+    Id = "__default_policy_ID"
+    Statement = [{
+      Action = "SQS:*"
+      Effect = "Allow"
+      Principal = {
+        AWS = "arn:aws:iam::692137657276:root"
+      }
+      Resource = "arn:aws:sqs:us-east-1:692137657276:${var.environment == "prod" ? "cv-case-events-dlq.fifo" : "cv-case-events-dlq-${var.environment}.fifo"}"
+      Sid      = "__owner_statement"
+    }]
+    Version = "2012-10-17"
+  })
+}
+
+module "cv_case_events" {
+  source                     = "../../../../modules/aws/sqs"
+  name                       = "cv-case-events"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = var.environment == "prod" ? "cv-case-events.fifo" : "cv-case-events-${var.environment}.fifo"
+  fifo_queue                 = true
+  content_based_deduplication = false
+  visibility_timeout_seconds = 60
+  message_retention_seconds  = 345600
+  max_message_size           = 262144
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 0
+  dlq_arn                    = module.cv_case_events_dlq.queue_arn
+  max_receive_count          = 5
+  policy = jsonencode({
+    Id = "__default_policy_ID"
+    Statement = [{
+      Action = "SQS:*"
+      Effect = "Allow"
+      Principal = {
+        AWS = "arn:aws:iam::692137657276:root"
+      }
+      Resource = "arn:aws:sqs:us-east-1:692137657276:${var.environment == "prod" ? "cv-case-events.fifo" : "cv-case-events-${var.environment}.fifo"}"
+      Sid      = "__owner_statement"
+    }]
+    Version = "2012-10-17"
+  })
+}
+
+# =============================================================
+# Consolidated CloudWatch Logging Groups
+# =============================================================
+module "preprod_cv_case_events_log_group" {
+  source            = "../../../../modules/aws/cloudwatch_log_group"
+  name              = "/ecs/Preprod-CvCaseEvents"
+  retention_in_days = 7
+  tags = {
+    Name        = "/ecs/Preprod-CvCaseEvents"
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+# =============================================================
+# Compute and IAM for cv-case-events
+# =============================================================
+module "ecr_preprod_cv_case_events" {
+  source               = "../../../../modules/aws/ecr"
+  name                 = "cv-case-events"
+  environment          = var.environment
+  project              = var.project
+  name_override        = "preprod-cv-case-events"
+  image_tag_mutability = "MUTABLE"
+  scan_on_push         = false
+}
+
+data "aws_iam_policy_document" "api_cv_case_events_policy_doc" {
+  statement {
+    actions   = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+    resources = [
+      module.cv_case_events.queue_arn,
+      module.cv_case_events_dlq.queue_arn
+    ]
+  }
+  statement {
+    actions   = ["dynamodb:PutItem"]
+    resources = [module.dynamodb_processed_events.table_arn]
+  }
+  statement {
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    resources = [
+      "${module.preprod_cv_case_events_log_group.log_group_arn}:*"
+    ]
+  }
+}
+
+module "iam_api_cv_case_events_policy" {
+  source      = "../../../../modules/aws/iam_policy"
+  name        = "preprod-api-cv-case-events-policy"
+  role_name   = module.iam_ecs_task_execution_role.role_name
+  is_inline   = false
+  policy      = data.aws_iam_policy_document.api_cv_case_events_policy_doc.json
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecs_cv_case_events_service" {
+  source                       = "../../../../modules/aws/ecs_service"
+  service_name                 = "Preprod-CvCaseEvents"
+  family                       = "preprod-cv-case-events"
+  cluster_arn                  = module.ecs_cluster.cluster_arn
+  cpu                          = "256"
+  memory                       = "512"
+  execution_role_arn           = module.iam_ecs_task_execution_role.role_arn
+  task_role_arn                = module.iam_ecs_task_execution_role.role_arn
+  desired_count                = 1
+  platform_version             = "LATEST"
+  launch_type                  = var.ecs_launch_type
+
+  subnet_ids         = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
+  security_group_ids = [module.preprod_worker_sg.security_group_id]
+  assign_public_ip   = true
+
+  container_definitions = jsonencode([{
+    name      = "cv-case-events-worker"
+    image     = "${module.ecr_preprod_cv_case_events.repository_url}:latest"
+    cpu       = 256
+    memory    = 512
+    essential = true
+    command   = ["python", "-m", "altrx_backend.worker", "cv-case-events-worker"]
+    environmentFiles = [{
+      value = "arn:aws:s3:::${var.environment}-${lower(var.project)}-v3-uploads/backend-env/backend.env"
+      type  = "s3"
+    }]
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        "awslogs-group"         = module.preprod_cv_case_events_log_group.log_group_name
+        "awslogs-region"        = var.aws_region
+        "awslogs-stream-prefix" = "cv-case-events"
+      }
+    }
+  }])
+
+  enable_circuit_breaker = true
+  capacity_providers = [
+    {
+      capacity_provider = "FARGATE"
+      weight            = 1
+      base              = 0
+    }
+  ]
+
+  environment = var.environment
+  project     = var.project
+}
+
+# =============================================================
+# SNS Topic & CloudWatch Alarms for cv-case-events
+# =============================================================
+resource "aws_sns_topic" "preprod_alerts" {
+  name = "preprod-alerts"
+  tags = {
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "cv_case_events_dlq_depth" {
+  alarm_name          = "${var.environment}-cv-case-events-dlq-depth"
+  alarm_description   = "DLQ depth > 0 for cv-case-events-dlq-preprod.fifo"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.preprod_alerts.arn]
+
+  dimensions = {
+    QueueName = module.cv_case_events_dlq.queue_name
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "cv_case_events_backlog" {
+  alarm_name          = "${var.environment}-cv-case-events-backlog"
+  alarm_description   = "SQS backlog age > 30 minutes for cv-case-events-preprod.fifo"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateAgeOfOldestMessage"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 1800
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.preprod_alerts.arn]
+
+  dimensions = {
+    QueueName = module.cv_case_events.queue_name
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "cv_case_events_cio_failed" {
+  name           = "${var.environment}-cv-case-events-cio-failed"
+  pattern        = "cv_case_events.cio_failed"
+  log_group_name = module.preprod_cv_case_events_log_group.log_group_name
+
+  metric_transformation {
+    name          = "CvCaseEventsCioFailed"
+    namespace     = "ALTRX/Worker"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "cv_case_events_cio_failed" {
+  alarm_name          = "${var.environment}-cv-case-events-cio-failed"
+  alarm_description   = "Log metric alarm for cv_case_events.cio_failed occurrences"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "CvCaseEventsCioFailed"
+  namespace           = "ALTRX/Worker"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.preprod_alerts.arn]
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+resource "aws_cloudwatch_log_metric_filter" "carevalidate_webhook_invalid_signature" {
+  name           = "${var.environment}-carevalidate-webhook-invalid-signature"
+  pattern        = "carevalidate.webhook.invalid_signature"
+  log_group_name = module.preprod_backend_log_group.log_group_name
+
+  metric_transformation {
+    name          = "CareValidateWebhookInvalidSignature"
+    namespace     = "ALTRX/API"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "carevalidate_webhook_invalid_signature" {
+  alarm_name          = "${var.environment}-carevalidate-webhook-invalid-signature"
+  alarm_description   = "Log metric alarm for carevalidate.webhook.invalid_signature occurrences"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "CareValidateWebhookInvalidSignature"
+  namespace           = "ALTRX/API"
+  period              = 300
+  statistic           = "Sum"
+  threshold           = 1
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.preprod_alerts.arn]
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project
+  }
+}

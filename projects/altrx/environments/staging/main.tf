@@ -1650,3 +1650,39 @@ resource "aws_cloudwatch_metric_alarm" "carevalidate_webhook_invalid_signature" 
     Project     = var.project
   }
 }
+
+# =============================================================
+# IAM Tester User Policy for SQS (Imported Modularly)
+# =============================================================
+data "aws_iam_user" "tester" {
+  user_name = "altrx_staging_tester"
+}
+
+module "iam_cv_case_events_user_policy" {
+  source      = "../../../../modules/aws/iam_policy"
+  name        = "cv-case-events-sqs"
+  user_name   = data.aws_iam_user.tester.user_name
+  is_inline   = true
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "CvCaseEventsSQS"
+        Effect   = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = [
+          module.cv_case_events.queue_arn
+        ]
+      }
+    ]
+  })
+  environment = var.environment
+  project     = var.project
+}
+
+
