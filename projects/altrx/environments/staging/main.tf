@@ -401,6 +401,30 @@ module "dynamodb_weight_logs" {
   ]
 }
 
+module "dynamodb_trinity_weight_logs" {
+  source                      = "../../../../modules/aws/dynamodb"
+  name                        = "staging_altrx-trinity-weight-logs"
+  hash_key                    = "user_id"
+  range_key                   = "log_date"
+  billing_mode                = "PAY_PER_REQUEST"
+  deletion_protection_enabled = true
+  environment                 = var.environment
+  project                     = var.project
+  attributes = [
+    { name = "user_id", type = "S" },
+    { name = "log_date", type = "S" },
+    { name = "email", type = "S" }
+  ]
+  global_secondary_indexes = [
+    {
+      name            = "email-index"
+      hash_key        = "email"
+      projection_type = "ALL"
+    }
+  ]
+}
+
+
 # =============================================================
 # Consolidated Load Balancing (ALB, Listeners, Target Groups)
 # =============================================================
@@ -959,6 +983,11 @@ data "aws_ecs_task_definition" "staging_worker_payment" {
   task_definition = "staging_altrx-payment-worker"
 }
 
+data "aws_ecs_task_definition" "staging_cv_case_events" {
+  task_definition = "staging-cv-case-events"
+}
+
+
 module "ecs_backend_service" {
   source                            = "../../../../modules/aws/ecs_service"
   service_name                      = "Staging-Backend"
@@ -1108,8 +1137,10 @@ module "ecs_cv_case_events_service" {
   desired_count                = 1
   platform_version             = "LATEST"
   launch_type                  = var.ecs_launch_type
+  task_definition_arn_override = data.aws_ecs_task_definition.staging_cv_case_events.arn
 
   subnet_ids         = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
+
   security_group_ids = [module.staging_worker_sg.security_group_id]
   assign_public_ip   = true
 
