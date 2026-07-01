@@ -89,3 +89,46 @@ variable "bastion_key_name" {
   default     = null
   description = "The SSH key pair name for the EC2 bastion instance"
 }
+
+variable "certificate_arn" {
+  type        = string
+  description = "ACM certificate ARN for HTTPS listeners on the ALB"
+}
+
+variable "webhook_secret" {
+  type        = string
+  sensitive   = true
+  description = "HMAC secret used to verify incoming webhook payloads"
+}
+
+variable "secret_google_api_key" {
+  type        = string
+  sensitive   = true
+  description = "Google API key (Gemini) stored in Secrets Manager"
+}
+
+variable "secret_openai_api_key" {
+  type        = string
+  sensitive   = true
+  description = "OpenAI API key stored in Secrets Manager"
+  default     = ""
+}
+
+variable "secret_deeptag_api_key" {
+  type        = string
+  sensitive   = true
+  description = "DeepTag API key stored in Secrets Manager"
+}
+
+variable "secret_email_smtp_password" {
+  type        = string
+  sensitive   = true
+  description = "SMTP password for outbound email stored in Secrets Manager"
+}
+
+variable "secret_gupshup_numbers" {
+  type        = string
+  sensitive   = true
+  description = "Gupshup whitelisted sender numbers stored in Secrets Manager"
+  default     = ""
+}

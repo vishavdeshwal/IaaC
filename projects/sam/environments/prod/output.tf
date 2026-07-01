@@ -29,13 +29,8 @@ output "ecr_repository_url" {
 }
 
 output "ecs_cluster_name" {
-  value       = module.ecs_fargate.cluster_name
+  value       = module.ecs_cluster.cluster_name
   description = "The name of the ECS Cluster"
-}
-
-output "ecs_service_name" {
-  value       = module.ecs_fargate.service_name
-  description = "The name of the ECS Service"
 }
 
 output "sqs_delay_queue_url" {
