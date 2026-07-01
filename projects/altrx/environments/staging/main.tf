@@ -1716,4 +1716,43 @@ module "iam_cv_case_events_user_policy" {
   project     = var.project
 }
 
+module "iam_altrx_local_testing_policy" {
+  source      = "../../../../modules/aws/iam_policy"
+  name        = "altrx_local_testing"
+  user_name   = data.aws_iam_user.tester.user_name
+  is_inline   = false
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "StagingDynamoDBAccess"
+        Effect   = "Allow"
+        Action   = ["dynamodb:DescribeTable", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan"]
+        Resource = [
+          "arn:aws:dynamodb:us-east-1:692137657276:table/staging_altrx-*",
+          "arn:aws:dynamodb:us-east-1:692137657276:table/staging_altrx-*/index/*"
+        ]
+      },
+      {
+        Sid      = "StagingSQSAccess"
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+        Resource = ["arn:aws:sqs:us-east-1:692137657276:staging_altrx-payment-events"]
+      },
+      {
+        Sid      = "StagingS3Access"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"]
+        Resource = [
+          "arn:aws:s3:::staging-altrx-v3-uploads",
+          "arn:aws:s3:::staging-altrx-v3-uploads/*"
+        ]
+      }
+    ]
+  })
+  environment = var.environment
+  project     = var.project
+}
+
+
 
