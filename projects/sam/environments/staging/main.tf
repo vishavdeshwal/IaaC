@@ -18,7 +18,7 @@ terraform {
 
 provider "aws" {
     region = var.aws_region
-    profile = var.aws_profile 
+    profile = var.aws_profile
 }
 
 module "vpc" {
@@ -80,7 +80,6 @@ module "route_table_association" {
 }
 
 
-
 // --------- Security Groups ------------------
 module "alb_sg" {
     source = "../../../../modules/aws/security_groups"
@@ -95,7 +94,6 @@ module "alb_sg" {
             to_port = 80
             protocol = "tcp"
             description = "Allow HTTP traffic"
-
             cidr_blocks = ["0.0.0.0/0"]
         },
         {
@@ -103,6 +101,13 @@ module "alb_sg" {
             to_port = 443
             protocol = "tcp"
             description = "Allow HTTPS traffic"
+            cidr_blocks = ["0.0.0.0/0"]
+        },
+        {
+            from_port = 8443
+            to_port = 8443
+            protocol = "tcp"
+            description = "Allow HTTPS dashboard traffic"
             cidr_blocks = ["0.0.0.0/0"]
         }
     ]
@@ -120,7 +125,6 @@ module "alb_sg" {
 
 module "app_sg" {
     source = "../../../../modules/aws/security_groups"
-
     name = "app"
     vpc_id = module.vpc.vpc_id
     environment = var.environment
@@ -132,15 +136,22 @@ module "app_sg" {
             to_port = 8080
             protocol = "tcp"
             description = "Allow traffic from ALB"
-
+            cidr_blocks = []
+            security_groups = [
+                module.alb_sg.security_group_id
+            ]
+        },
+        {
+            from_port = 8091
+            to_port = 8091
+            protocol = "tcp"
+            description = "Allow dashboard traffic from ALB"
             cidr_blocks = []
             security_groups = [
                 module.alb_sg.security_group_id
             ]
         }
     ]
-
-
 
     egress_rules = [
         {
@@ -167,7 +178,6 @@ module "redis-sg" {
             to_port = 6379
             protocol = "tcp"
             description = "Allow traffic from Application"
-
             cidr_blocks = []
             security_groups = [
                 module.app_sg.security_group_id
@@ -189,7 +199,6 @@ module "redis-sg" {
 
 module "db-sg" {
     source = "../../../../modules/aws/security_groups"
-
     name = "aurora"
     vpc_id = module.vpc.vpc_id
     environment = var.environment
@@ -201,7 +210,6 @@ module "db-sg" {
             to_port = 5432
             protocol = "tcp"
             description = "Allow traffic from Application"
-
             cidr_blocks = []
             security_groups = [
                 module.app_sg.security_group_id
@@ -212,7 +220,6 @@ module "db-sg" {
             to_port = 5432
             protocol = "tcp"
             description = "Allow traffic from Bastion"
-
             cidr_blocks = []
             security_groups = [
                 module.bastion_sg.security_group_id
@@ -261,8 +268,7 @@ module "bastion_sg" {
 }
 //-----------------------------------
 
-// SQS_DQL and SQS Queue
-
+// SQS Queues
 module "sqs_dlq" {
     source = "../../../../modules/aws/sqs"
     name = "app-dlq"
@@ -270,13 +276,11 @@ module "sqs_dlq" {
     project = var.project
 }
 
-
 module "sqs" {
     source = "../../../../modules/aws/sqs"
     name = "app-queue"
     environment = var.environment
     project = var.project
-
     dlq_arn = module.sqs_dlq.queue_arn
 }
 
@@ -297,17 +301,47 @@ module "sqs_delay_dlq" {
     project = var.project
 }
 
+module "sqs_render_dlq" {
+    source = "../../../../modules/aws/sqs"
+    name = "app-render-dlq"
+    environment = var.environment
+    project = var.project
+}
 
+module "sqs_render" {
+    source = "../../../../modules/aws/sqs"
+    name = "app-render-queue"
+    environment = var.environment
+    project = var.project
+    visibility_timeout_seconds = 90
+    max_receive_count = 3
+    dlq_arn = module.sqs_render_dlq.queue_arn
+}
+
+module "sqs_scan_dlq" {
+    source = "../../../../modules/aws/sqs"
+    name = "app-scan-dlq"
+    environment = var.environment
+    project = var.project
+}
+
+module "sqs_scan" {
+    source = "../../../../modules/aws/sqs"
+    name = "app-scan-queue"
+    environment = var.environment
+    project = var.project
+    visibility_timeout_seconds = 90
+    max_receive_count = 3
+    dlq_arn = module.sqs_scan_dlq.queue_arn
+}
 //--------------------------------------
 
 
-// Aurora Serverless v2 ----------
-
+// Aurora Serverless v2
 module "aurora" {
     source = "../../../../modules/aws/aurora"
     cluster_identifier = "aurora-db"
-    
-    # Enable Serverless v2
+
     instance_class = "db.serverless"
     num_instances = 1
 
@@ -321,7 +355,7 @@ module "aurora" {
         module.subnets.private_subnet_ids["db-1"],
         module.subnets.private_subnet_ids["db-2"]
     ]
-    
+
     security_group_ids = [
         module.db-sg.security_group_id
     ]
@@ -331,7 +365,7 @@ module "aurora" {
 }
 //----------------------------------
 
-// --------- Redis ----------
+// Redis
 module "redis" {
     source = "../../../../modules/aws/elasticache"
     name = "cache"
@@ -353,13 +387,11 @@ module "redis" {
     environment = var.environment
     project = var.project
 }
-
-
-
 //----------------------------
-// Load Balancing Tier
-# 1. Target Group (Routing destination for Fargate containers)
 
+// Load Balancing Tier
+
+# 1. Default target group (webhook / fallback)
 module "target_group" {
     source = "../../../../modules/aws/target_group"
     name = "app-tg-8080"
@@ -372,8 +404,49 @@ module "target_group" {
     project = var.project
 }
 
-# 2 Application Load Balancer (Receives web traffic)
+# 2. WebAPI target group (routes /v1/* on port 443)
+module "target_group_webapi" {
+    source = "../../../../modules/aws/target_group"
+    name_override = "stg-sammmm-tg-webapi-8080"
+    name = "tg-webapi-8080"
+    port = 8080
+    protocol = "HTTP"
+    target_type = "ip"
+    vpc_id = module.vpc.vpc_id
+    health_check_path = var.health_check_path
+    environment = var.environment
+    project = var.project
+}
 
+# 3. WebChat target group (routes /v1/ws/* on port 443)
+module "target_group_webchat" {
+    source = "../../../../modules/aws/target_group"
+    name_override = "stg-sammmm-tg-webchat-8080"
+    name = "tg-webchat-8080"
+    port = 8080
+    protocol = "HTTP"
+    target_type = "ip"
+    vpc_id = module.vpc.vpc_id
+    health_check_path = var.health_check_path
+    environment = var.environment
+    project = var.project
+}
+
+# 4. Dashboard target group (port 8443 listener → port 8091 on container)
+module "target_group_dashboard" {
+    source = "../../../../modules/aws/target_group"
+    name_override = "staging-SAMMMM-app-tg-dash-8091"
+    name = "app-tg-dash-8091"
+    port = 8091
+    protocol = "HTTP"
+    target_type = "ip"
+    vpc_id = module.vpc.vpc_id
+    health_check_path = var.health_check_path
+    environment = var.environment
+    project = var.project
+}
+
+# 5. Application Load Balancer (port 443 HTTPS, default → webhook/fallback TG)
 module "alb" {
     source = "../../../../modules/aws/alb"
     name = "app-alb"
@@ -397,69 +470,73 @@ module "alb" {
     environment = var.environment
     project = var.project
 }
-//--------------------------
 
-// Container Runtime Tier
-# ECS Fargate Cluster & Service
+# 6. ALB Listener Rules (path-based routing on port 443)
+# Priority 5 must come before 10 so /v1/ws/* is matched before /v1/*
+resource "aws_lb_listener_rule" "webchat" {
+    listener_arn = module.alb.http_listener_arn
+    priority     = 5
 
-module "ecs_fargate" {
-    source = "../../../../modules/aws/ecs_fargate"
-    cluster_name = "app-sammmm"
-    service_name = "sammmm-webhook"
-    task_family = "sammmm-webhook-task"
+    action {
+        type             = "forward"
+        target_group_arn = module.target_group_webchat.target_group_arn
+    }
 
-    cpu = 256
-    memory = 512
-    desired_count = 1
-
-    subnet_ids = [
-    module.subnets.private_subnet_ids["app-1"],
-    module.subnets.private_subnet_ids["app-2"]
-   ]
-
-   security_group_ids = [
-    module.app_sg.security_group_id
-   ]
-
-    # Bind to to ALB
-    target_group_arn = module.target_group.target_group_arn
-    container_name = "webhook"
-    container_port = 8080
-
-    # Container Specifications
-    container_definitions = jsonencode ([
-        {
-            name = "webhook"
-            image = "${module.ecr.repository_url}:latest"
-            essential = true
-            command = ["webhook"]
-
-            portMappings = [
-                {
-                    containerPort = 8080
-                    hostPort = 8080
-                    protocol = "tcp"
-                }
-            ]
-
-            environment = local.sam_env_vars
-            secrets     = local.sam_secrets
-
-            logConfiguration = {
-                logDriver = "awslogs"
-                options = {
-                    "awslogs-group" = "/ecs/staging-sammmm-webhook"
-                    "awslogs-region" = var.aws_region
-                    "awslogs-stream-prefix" = "ecs"
-                    "awslogs-create-group" = "true"
-                }
-            }
+    condition {
+        path_pattern {
+            values = ["/v1/ws/*"]
         }
-    ])
-    environment = var.environment
-    project = var.project
+    }
 }
 
+resource "aws_lb_listener_rule" "webapi" {
+    listener_arn = module.alb.http_listener_arn
+    priority     = 10
+
+    action {
+        type             = "forward"
+        target_group_arn = module.target_group_webapi.target_group_arn
+    }
+
+    condition {
+        path_pattern {
+            values = ["/v1/*"]
+        }
+    }
+}
+
+# 7. Dashboard listener (port 8443 → dashboard TG on port 8091)
+resource "aws_lb_listener" "dashboard" {
+    load_balancer_arn = module.alb.alb_arn
+    port              = 8443
+    protocol          = "HTTPS"
+    ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+    certificate_arn   = "arn:aws:acm:ap-south-1:515966492403:certificate/390cbef8-cfb1-4a5a-81aa-f2a463724290"
+
+    default_action {
+        type             = "forward"
+        target_group_arn = module.target_group_dashboard.target_group_arn
+    }
+
+    tags = {
+        Name        = "${var.environment}-${var.project}-dashboard-listener"
+        Environment = var.environment
+        Project     = var.project
+    }
+}
+//--------------------------
+
+// ECS Cluster
+# Extracted from the former ecs_fargate module so the cluster can be shared
+# across all services without being tied to a single service definition.
+module "ecs_cluster" {
+    source       = "../../../../modules/aws/ecs_cluster"
+    cluster_name = "${var.environment}-${var.project}-app-sammmm"
+    environment  = var.environment
+    project      = var.project
+}
+
+// ECR
 module "ecr" {
     source = "../../../../modules/aws/ecr"
     name = "sammmm-backend"
@@ -467,11 +544,10 @@ module "ecr" {
     project = var.project
     image_tag_mutability = "IMMUTABLE"
     scan_on_push = false
-
 }
 
 // =============================================================
-// Secrets Manager Integration (Modularized)
+// Secrets Manager
 // =============================================================
 
 module "secret_database_url" {
@@ -482,7 +558,6 @@ module "secret_database_url" {
   project       = var.project
 }
 
-
 module "secret_gupshup_hmac_secret" {
   source        = "../../../../modules/aws/secrets_manager"
   secret_name   = "${var.environment}/${var.project}/GUPSHUP_HMAC_SECRET"
@@ -490,7 +565,6 @@ module "secret_gupshup_hmac_secret" {
   environment   = var.environment
   project       = var.project
 }
-
 
 module "secret_gupshup_token" {
   source        = "../../../../modules/aws/secrets_manager"
@@ -508,9 +582,48 @@ module "secret_clevertap_passcode" {
   project       = var.project
 }
 
+module "secret_google_api_key" {
+  source        = "../../../../modules/aws/secrets_manager"
+  secret_name   = "${var.environment}/${var.project}/GOOGLE_API_KEY"
+  secret_string = var.secret_google_api_key
+  environment   = var.environment
+  project       = var.project
+}
+
+module "secret_openai_api_key" {
+  source        = "../../../../modules/aws/secrets_manager"
+  secret_name   = "${var.environment}/${var.project}/OPENAI_API_KEY"
+  secret_string = var.secret_openai_api_key
+  environment   = var.environment
+  project       = var.project
+}
+
+module "secret_deeptag_api_key" {
+  source        = "../../../../modules/aws/secrets_manager"
+  secret_name   = "${var.environment}/${var.project}/DEEPTAG_API_KEY"
+  secret_string = var.secret_deeptag_api_key
+  environment   = var.environment
+  project       = var.project
+}
+
+module "secret_email_smtp_password" {
+  source        = "../../../../modules/aws/secrets_manager"
+  secret_name   = "${var.environment}/${var.project}/EMAIL_SMTP_PASSWORD"
+  secret_string = var.secret_email_smtp_password
+  environment   = var.environment
+  project       = var.project
+}
+
+module "secret_gupshup_numbers" {
+  source        = "../../../../modules/aws/secrets_manager"
+  secret_name   = "${var.environment}/${var.project}/GUPSHUP_NUMBERS"
+  secret_string = var.secret_gupshup_numbers
+  environment   = var.environment
+  project       = var.project
+}
 
 // =============================================================
-// ECS Task Roles & Policies (Modularized)
+// IAM — Shared assume-role policy + per-service roles & policies
 // =============================================================
 
 locals {
@@ -527,6 +640,7 @@ locals {
     ]
   })
 
+  // Used by ingest and flush workers
   sam_env_vars = [
     { name = "APP_NAME", value = "sammmm" },
     { name = "APP_ENV", value = var.environment },
@@ -570,9 +684,7 @@ locals {
     { name = "HEALTH_PORT", value = "9091" },
     { name = "HEALTH_SHUTDOWN_TIMEOUT", value = "5s" },
     { name = "HEALTH_PROBE_TIMEOUT", value = "2s" },
-    { name = "GOOGLE_API_KEY", value = "AIzaSyC4iRJb0-RBcvk3qNusRrvQd5BKXNyXMuE" },
     { name = "GEMINI_MODEL", value = "gemini-2.5-flash" },
-    { name = "OPENAI_API_KEY", value = "" },
     { name = "LLM_FALLBACK_MODEL", value = "gpt-5-nano" },
     { name = "LLM_DEFAULT_CREATOR", value = "heli" },
     { name = "LLM_DEFAULT_PRODUCT", value = "cheek_tint_ph" },
@@ -580,15 +692,77 @@ locals {
     { name = "SELECTIVE_REASK_ENABLED", value = "false" }
   ]
 
+  // webapi / webchat / dashboard add these on top of sam_env_vars
+  sam_webapi_env_vars = concat(local.sam_env_vars, [
+    { name = "DEEPTAG_TIMEOUT", value = "90s" },
+    { name = "DEEPTAG_DISABLED", value = "false" },
+    { name = "DEEPTAG_BASE_URL", value = "https://gserver1.btbp.org/deeptag/AppService.svc" },
+    { name = "WEBHOOK_SECRET", value = var.webhook_secret },
+    { name = "MESSAGES_REFRESH_TTL", value = "5m" },
+    { name = "WEBAPI_ALLOWED_ORIGINS", value = "*" },
+    { name = "WEBAPI_COOKIE_SAME_SITE", value = "none" },
+    { name = "COMPLETION_SUMMARY_ENABLED", value = "true" },
+    { name = "MIDLINER_THRESHOLDS", value = "12,18,20" },
+    { name = "BIOMETRIC_CONSENT_VERSION", value = "v1.0" },
+  ])
+
+  // Secrets for ingest / flush workers
   sam_secrets = [
     { name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn },
     { name = "GUPSHUP_HMAC_SECRET", valueFrom = module.secret_gupshup_hmac_secret.secret_arn },
     { name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn },
     { name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn }
   ]
+
+  // Secrets for webapi / webchat / dashboard
+  sam_api_secrets = [
+    { name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn },
+    { name = "GUPSHUP_HMAC_SECRET", valueFrom = module.secret_gupshup_hmac_secret.secret_arn },
+    { name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn },
+    { name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn },
+    { name = "GOOGLE_API_KEY", valueFrom = module.secret_google_api_key.secret_arn },
+    { name = "DEEPTAG_API_KEY", valueFrom = module.secret_deeptag_api_key.secret_arn },
+  ]
+
+  // Secrets for pdf / scan workers
+  sam_worker_v2_secrets = [
+    { name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn },
+    { name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn },
+    { name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn },
+    { name = "GOOGLE_API_KEY", valueFrom = module.secret_google_api_key.secret_arn },
+    { name = "DEEPTAG_API_KEY", valueFrom = module.secret_deeptag_api_key.secret_arn },
+    { name = "EMAIL_SMTP_PASSWORD", valueFrom = module.secret_email_smtp_password.secret_arn },
+    { name = "OPENAI_API_KEY", valueFrom = module.secret_openai_api_key.secret_arn },
+  ]
 }
 
-# 1. Webhook Service Task Role & Policy
+// =============================================================
+// IAM Roles — per service
+// =============================================================
+
+# Roles previously created internally by module "ecs_fargate".
+# webapi, webchat and dashboard all use these two roles.
+module "webhook_task_exec_role" {
+  source             = "../../../../modules/aws/iam_role"
+  name               = "${var.environment}-${var.project}-sammmm-webhook-task-exec-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = [
+    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+  ]
+  environment        = var.environment
+  project            = var.project
+}
+
+module "webhook_task_task_role" {
+  source             = "../../../../modules/aws/iam_role"
+  name               = "${var.environment}-${var.project}-sammmm-webhook-task-task-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = []
+  environment        = var.environment
+  project            = var.project
+}
+
+# 1. Webhook / WebAPI policy (SQS send + Secrets)
 resource "aws_iam_policy" "webhook_policy" {
   name        = "${var.environment}-${var.project}-webhook-policy"
   description = "Permissions for Sammmm webhook service to access SQS and Secrets Manager"
@@ -623,7 +797,7 @@ resource "aws_iam_role_policy_attachment" "webhook_attachment" {
   policy_arn = aws_iam_policy.webhook_policy.arn
 }
 
-# 2. Ingest Service Task Role & Policy
+# 2. Ingest policy
 resource "aws_iam_policy" "ingest_policy" {
   name        = "${var.environment}-${var.project}-ingest-policy"
   description = "Permissions for Sammmm ingest service to process inbound and queue to flush SQS"
@@ -668,7 +842,7 @@ resource "aws_iam_role_policy_attachment" "ingest_attachment" {
   policy_arn = aws_iam_policy.ingest_policy.arn
 }
 
-# 3. Flush Service Task Role & Policy
+# 3. Flush policy
 resource "aws_iam_policy" "flush_policy" {
   name        = "${var.environment}-${var.project}-flush-policy"
   description = "Permissions for Sammmm flush and migrate service to read flush SQS and Secrets Manager"
@@ -709,7 +883,7 @@ resource "aws_iam_role_policy_attachment" "flush_attachment" {
   policy_arn = aws_iam_policy.flush_policy.arn
 }
 
-# 4. ECS Task Execution Role (separate from task role)
+# 4. Shared ECS task execution role (used by ingest, flush, pdf, scan)
 module "ecs_execution_role" {
   source             = "../../../../modules/aws/iam_role"
   name               = "${var.environment}-${var.project}-ecs-execution-role"
@@ -721,7 +895,6 @@ module "ecs_execution_role" {
   project            = var.project
 }
 
-# Task Execution Role Secrets Policy (Allows ECS to fetch secrets at startup and write/create log groups)
 resource "aws_iam_policy" "ecs_execution_secrets_policy" {
   name        = "${var.environment}-${var.project}-ecs-execution-secrets"
   description = "Allows ECS Execution Role to fetch application secrets from Secrets Manager at startup and manage log groups"
@@ -751,28 +924,28 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_secrets_attachment" {
   policy_arn = aws_iam_policy.ecs_execution_secrets_policy.arn
 }
 
-# 5. Attach Secrets Access to the internally managed Fargate task execution role
+# Attach secrets policy to the webhook-task exec role (used by webapi/webchat/dashboard)
 resource "aws_iam_role_policy_attachment" "fargate_execution_secrets" {
-  role       = "${var.environment}-${var.project}-sammmm-webhook-task-exec-role"
+  role       = module.webhook_task_exec_role.role_name
   policy_arn = aws_iam_policy.ecs_execution_secrets_policy.arn
 }
 
-# 6. Attach Webhook SQS and Secret permissions to the internally managed Fargate task role
+# Attach webhook SQS + secret permissions to the webhook-task task role
 resource "aws_iam_role_policy_attachment" "fargate_task_webhook" {
-  role       = "${var.environment}-${var.project}-sammmm-webhook-task-task-role"
+  role       = module.webhook_task_task_role.role_name
   policy_arn = aws_iam_policy.webhook_policy.arn
 }
 
-
 // =============================================================
-// Background Worker ECS Services (Ingest & Flush)
+// ECS Services
 // =============================================================
 
+# Ingest — reads from app-queue, writes to app-delay-queue
 module "ecs_ingest" {
   source             = "../../../../modules/aws/ecs_service"
   service_name       = "${var.environment}-${var.project}-sammmm-ingest"
   family             = "${var.environment}-${var.project}-sammmm-ingest-task"
-  cluster_arn        = module.ecs_fargate.cluster_arn
+  cluster_arn        = module.ecs_cluster.cluster_arn
   cpu                = "256"
   memory             = "512"
   execution_role_arn = module.ecs_execution_role.role_arn
@@ -796,7 +969,6 @@ module "ecs_ingest" {
       essential = true
       command   = ["ingest"]
       portMappings = []
-
       environment = local.sam_env_vars
       secrets     = local.sam_secrets
       logConfiguration = {
@@ -815,12 +987,12 @@ module "ecs_ingest" {
   project     = var.project
 }
 
-
+# Flush — reads from app-delay-queue
 module "ecs_flush" {
   source             = "../../../../modules/aws/ecs_service"
   service_name       = "${var.environment}-${var.project}-sammmm-flush"
   family             = "${var.environment}-${var.project}-sammmm-flush-task"
-  cluster_arn        = module.ecs_fargate.cluster_arn
+  cluster_arn        = module.ecs_cluster.cluster_arn
   cpu                = "256"
   memory             = "512"
   execution_role_arn = module.ecs_execution_role.role_arn
@@ -844,7 +1016,6 @@ module "ecs_flush" {
       essential = true
       command   = ["flush"]
       portMappings = []
-
       environment = local.sam_env_vars
       secrets     = local.sam_secrets
       logConfiguration = {
@@ -863,8 +1034,273 @@ module "ecs_flush" {
   project     = var.project
 }
 
+# WebAPI — HTTP API server on port 8080, ALB routes /v1/*
+module "ecs_webapi" {
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "${var.environment}-${var.project}-sammmm-webapi"
+  family             = "${var.environment}-${var.project}-sammmm-webapi-task"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  cpu                = "256"
+  memory             = "512"
+  execution_role_arn = module.webhook_task_exec_role.role_arn
+  task_role_arn      = module.webhook_task_task_role.role_arn
+  desired_count      = 1
+  launch_type        = "FARGATE"
+
+  subnet_ids         = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip   = false
+
+  target_group_arn = module.target_group_webapi.target_group_arn
+  container_name   = "webapi"
+  container_port   = 8080
+
+  container_definitions = jsonencode([
+    {
+      name      = "webapi"
+      image     = "${module.ecr.repository_url}:latest"
+      essential = true
+      command   = ["webapi"]
+      portMappings = [
+        {
+          containerPort = 8080
+          hostPort      = 8080
+          protocol      = "tcp"
+        }
+      ]
+      environment = local.sam_webapi_env_vars
+      secrets     = local.sam_api_secrets
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/staging-sammmm-webapi"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+
+  environment = var.environment
+  project     = var.project
+}
+
+# WebChat — WebSocket server on port 8080, ALB routes /v1/ws/*
+module "ecs_webchat" {
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "${var.environment}-${var.project}-sammmm-webchat"
+  family             = "${var.environment}-${var.project}-sammmm-webchat-task"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  cpu                = "1024"
+  memory             = "2048"
+  execution_role_arn = module.webhook_task_exec_role.role_arn
+  task_role_arn      = module.webhook_task_task_role.role_arn
+  desired_count      = 1
+  launch_type        = "FARGATE"
+
+  subnet_ids         = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip   = false
+
+  target_group_arn = module.target_group_webchat.target_group_arn
+  container_name   = "webchat"
+  container_port   = 8080
+
+  container_definitions = jsonencode([
+    {
+      name      = "webchat"
+      image     = "${module.ecr.repository_url}:latest"
+      essential = true
+      command   = ["webchat"]
+      portMappings = [
+        {
+          containerPort = 8080
+          hostPort      = 8080
+          protocol      = "tcp"
+        }
+      ]
+      environment = local.sam_webapi_env_vars
+      secrets     = local.sam_api_secrets
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/staging-sammmm-webchat"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "webchat"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+
+  environment = var.environment
+  project     = var.project
+}
+
+# Dashboard — internal UI server on port 8091, accessed via ALB port 8443
+module "ecs_dashboard" {
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "${var.environment}-${var.project}-sammmm-dashboard"
+  family             = "${var.environment}-${var.project}-sammmm-dashboard-task"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  cpu                = "256"
+  memory             = "512"
+  execution_role_arn = module.webhook_task_exec_role.role_arn
+  task_role_arn      = module.webhook_task_task_role.role_arn
+  desired_count      = 1
+  launch_type        = "FARGATE"
+
+  subnet_ids         = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip   = false
+
+  target_group_arn = module.target_group_dashboard.target_group_arn
+  container_name   = "dashboard"
+  container_port   = 8091
+
+  container_definitions = jsonencode([
+    {
+      name      = "dashboard"
+      image     = "${module.ecr.repository_url}:latest"
+      essential = true
+      command   = ["dashboard"]
+      portMappings = [
+        {
+          containerPort = 8091
+          hostPort      = 8091
+          protocol      = "tcp"
+        }
+      ]
+      environment = local.sam_webapi_env_vars
+      secrets     = local.sam_api_secrets
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/staging-sammmm-dashboard"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+
+  environment = var.environment
+  project     = var.project
+}
+
+# PDF — background worker, generates PDF reports, no ALB
+module "ecs_pdf" {
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "${var.environment}-${var.project}-sammmm-pdf"
+  family             = "${var.environment}-${var.project}-sammmm-pdf-task"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  cpu                = "1024"
+  memory             = "2048"
+  execution_role_arn = module.ecs_execution_role.role_arn
+  task_role_arn      = module.flush_role.role_arn
+  desired_count      = 1
+  launch_type        = "FARGATE"
+
+  subnet_ids         = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip   = false
+
+  container_definitions = jsonencode([
+    {
+      name      = "pdf"
+      image     = "${module.ecr.repository_url}:latest"
+      essential = true
+      command   = ["pdf"]
+      portMappings = []
+      environment = local.sam_env_vars
+      secrets     = local.sam_worker_v2_secrets
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/staging-SAMMMM-sammmm-pdf"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+
+  environment = var.environment
+  project     = var.project
+}
+
+# Scan — background worker, image scanning, no ALB
+module "ecs_scan" {
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "${var.environment}-${var.project}-sammmm-scan"
+  family             = "${var.environment}-${var.project}-sammmm-scan-task"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  cpu                = "512"
+  memory             = "1024"
+  execution_role_arn = module.ecs_execution_role.role_arn
+  task_role_arn      = module.flush_role.role_arn
+  desired_count      = 1
+  launch_type        = "FARGATE"
+
+  subnet_ids         = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip   = false
+
+  container_definitions = jsonencode([
+    {
+      name      = "scan"
+      image     = "${module.ecr.repository_url}:latest"
+      essential = true
+      command   = ["scan"]
+      portMappings = []
+      environment = local.sam_env_vars
+      secrets     = local.sam_worker_v2_secrets
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/staging-SAMMMM-sammmm-scan"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+
+  environment = var.environment
+  project     = var.project
+}
+
 // =============================================================
-// Bastion Host Integration (EC2 with SSM & DB Access)
+// Bastion Host (EC2 + SSM + DB Access)
 // =============================================================
 
 data "aws_ssm_parameter" "al2023_ami" {

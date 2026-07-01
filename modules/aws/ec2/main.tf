@@ -22,4 +22,8 @@ resource "aws_instance" "ec2" {
         Environment = var.environment
         Project     = var.project
     }
+
+    lifecycle {
+        ignore_changes = [ami]
+    }
 }
