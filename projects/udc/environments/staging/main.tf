@@ -211,7 +211,6 @@ module "tg_be" {
   port              = 8080
   vpc_id            = module.vpc.vpc_id
   target_type       = "instance"
-  use_name_prefix   = true
   health_check_path = "/api/be/health"
   environment       = var.environment
   project           = var.project
@@ -223,7 +222,6 @@ module "tg_truedesk" {
   port              = 8081
   vpc_id            = module.vpc.vpc_id
   target_type       = "instance"
-  use_name_prefix   = true
   health_check_path = "/api/truedesk/health"
   environment       = var.environment
   project           = var.project
@@ -235,7 +233,6 @@ module "tg_master_web" {
   port              = 3000
   vpc_id            = module.vpc.vpc_id
   target_type       = "instance"
-  use_name_prefix   = true
   health_check_path = "/"
   environment       = var.environment
   project           = var.project
@@ -247,7 +244,6 @@ module "tg_master_admin" {
   port              = 3001
   vpc_id            = module.vpc.vpc_id
   target_type       = "instance"
-  use_name_prefix   = true
   health_check_path = "/"
   environment       = var.environment
   project           = var.project
@@ -259,7 +255,6 @@ module "tg_student_web" {
   port              = 3002
   vpc_id            = module.vpc.vpc_id
   target_type       = "instance"
-  use_name_prefix   = true
   health_check_path = "/"
   environment       = var.environment
   project           = var.project
@@ -271,7 +266,6 @@ module "tg_instructor_web" {
   port              = 3003
   vpc_id            = module.vpc.vpc_id
   target_type       = "instance"
-  use_name_prefix   = true
   health_check_path = "/"
   environment       = var.environment
   project           = var.project
