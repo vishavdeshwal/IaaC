@@ -73,4 +73,7 @@ output "bastion_instance_id" {
   description = "Instance ID of the EC2 bastion instance"
 }
 
-
+output "sam_frontend_ecr_repository_url" {
+  value       = module.ecr_frontend.repository_url
+  description = "The URL of the ECR repository for sam-frontend"
+}

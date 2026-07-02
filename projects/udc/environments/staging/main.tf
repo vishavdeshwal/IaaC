@@ -502,7 +502,7 @@ module "ecs_svc_be" {
   launch_type              = "EC2"
   network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
-  family                   = "udc-be"
+  family                   = "${var.environment}-udc-be"
   cluster_arn              = module.ecs_cluster.cluster_arn
   execution_role_arn       = module.ecs_execution_role.role_arn
   task_role_arn            = module.ecs_task_role.role_arn
@@ -520,7 +520,7 @@ module "ecs_svc_truedesk" {
   launch_type              = "EC2"
   network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
-  family                   = "udc-truedesk"
+  family                   = "${var.environment}-udc-truedesk"
   cluster_arn              = module.ecs_cluster.cluster_arn
   execution_role_arn       = module.ecs_execution_role.role_arn
   task_role_arn            = module.ecs_task_role.role_arn
@@ -538,7 +538,7 @@ module "ecs_svc_master_web" {
   launch_type              = "EC2"
   network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
-  family                   = "udc-master-web"
+  family                   = "${var.environment}-udc-master-web"
   cluster_arn              = module.ecs_cluster.cluster_arn
   execution_role_arn       = module.ecs_execution_role.role_arn
   task_role_arn            = module.ecs_task_role.role_arn
@@ -556,7 +556,7 @@ module "ecs_svc_master_admin" {
   launch_type              = "EC2"
   network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
-  family                   = "udc-master-admin"
+  family                   = "${var.environment}-udc-master-admin"
   cluster_arn              = module.ecs_cluster.cluster_arn
   execution_role_arn       = module.ecs_execution_role.role_arn
   task_role_arn            = module.ecs_task_role.role_arn
@@ -574,7 +574,7 @@ module "ecs_svc_student_web" {
   launch_type              = "EC2"
   network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
-  family                   = "udc-student-web"
+  family                   = "${var.environment}-udc-student-web"
   cluster_arn              = module.ecs_cluster.cluster_arn
   execution_role_arn       = module.ecs_execution_role.role_arn
   task_role_arn            = module.ecs_task_role.role_arn
@@ -592,7 +592,7 @@ module "ecs_svc_instructor_web" {
   launch_type              = "EC2"
   network_mode             = "bridge"
   requires_compatibilities = ["EC2"]
-  family                   = "udc-instructor-web"
+  family                   = "${var.environment}-udc-instructor-web"
   cluster_arn              = module.ecs_cluster.cluster_arn
   execution_role_arn       = module.ecs_execution_role.role_arn
   task_role_arn            = module.ecs_task_role.role_arn
@@ -632,4 +632,61 @@ module "sqs_session_unlock" {
   environment   = var.environment
   project       = var.project
   dlq_arn       = module.sqs_dlq.queue_arn
+}
+
+# ==============================================================================
+# 9. SNS & IAM Policies
+# ==============================================================================
+
+module "sns_notifications" {
+  source      = "../../../../modules/aws/sns"
+  name        = "notifications"
+  environment = var.environment
+  project     = var.project
+}
+
+resource "aws_iam_role_policy" "ecs_task_sns_publish" {
+  name = "${var.environment}-${var.project}-ecs-task-sns-publish"
+  role = module.ecs_task_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = ["sns:Publish"]
+        Effect   = "Allow"
+        Resource = module.sns_notifications.topic_arn
+      }
+    ]
+  })
+}
+
+# ==============================================================================
+# 10. SES
+# ==============================================================================
+
+module "ses_email" {
+  source        = "../../../../modules/aws/ses"
+  email_address = var.ses_email_address
+  environment   = var.environment
+  project       = var.project
+}
+
+resource "aws_iam_role_policy" "ecs_task_ses_send" {
+  name = "${var.environment}-${var.project}-ecs-task-ses-send"
+  role = module.ecs_task_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action   = [
+          "ses:SendEmail",
+          "ses:SendRawEmail"
+        ]
+        Effect   = "Allow"
+        Resource = module.ses_email.arn
+      }
+    ]
+  })
 }

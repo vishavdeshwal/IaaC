@@ -78,3 +78,8 @@ variable "container_def_instructor_web" {
   type        = string
   description = "JSON string defining the instructor-web container"
 }
+
+variable "ses_email_address" {
+  description = "The email address to verify for SES"
+  type        = string
+}

@@ -1,391 +1,401 @@
 terraform {
-    required_version = ">= 1.5.0"
-    required_providers {
-      aws = {
-        source = "hashicorp/aws"
-        version = "~> 5.0"
-      }
+  required_version = ">= 1.5.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
-    backend "s3" {
-        bucket       = "sammmm-terraform-state-847659"
-        key          = "sam/staging/terraform.tfstate"
-        region       = "ap-south-1"
-        profile      = "sam"
-        use_lockfile = true
-        encrypt      = true
-    }
+  }
+  backend "s3" {
+    bucket       = "sammmm-terraform-state-847659"
+    key          = "sam/staging/terraform.tfstate"
+    region       = "ap-south-1"
+    profile      = "sam"
+    use_lockfile = true
+    encrypt      = true
+  }
 }
 
 provider "aws" {
-    region = var.aws_region
-    profile = var.aws_profile
+  region  = var.aws_region
+  profile = var.aws_profile
 }
 
 module "vpc" {
-    source = "../../../../modules/aws/vpc"
-    vpc_cidr = var.vpc_cidr
-    instance_tenancy = var.instance_tenancy
-    enable_dns_hostnames = var.enable_dns_hostnames
-    enable_dns_support = var.enable_dns_support
-    environment = var.environment
-    project = var.project
+  source               = "../../../../modules/aws/vpc"
+  vpc_cidr             = var.vpc_cidr
+  instance_tenancy     = var.instance_tenancy
+  enable_dns_hostnames = var.enable_dns_hostnames
+  enable_dns_support   = var.enable_dns_support
+  environment          = var.environment
+  project              = var.project
 }
 
 module "subnets" {
-    source = "../../../../modules/aws/subnets"
-    vpc_id = module.vpc.vpc_id
-    public_subnets = var.public_subnets
-    private_subnets = var.private_subnets
-    environment = var.environment
-    project = var.project
+  source          = "../../../../modules/aws/subnets"
+  vpc_id          = module.vpc.vpc_id
+  public_subnets  = var.public_subnets
+  private_subnets = var.private_subnets
+  environment     = var.environment
+  project         = var.project
 }
 
 module "igw" {
-    source = "../../../../modules/aws/igw"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/igw"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 }
 
 module "eip" {
-    source = "../../../../modules/aws/eip"
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/eip"
+  environment = var.environment
+  project     = var.project
 }
 
 module "nat_gateway" {
-    source = "../../../../modules/aws/nat_gateway"
-    eip_allocation_id = module.eip.eip_allocation_id
-    public_subnet_id = module.subnets.public_subnet_ids["public-1"]
-    igw_dependency = module.igw.igw_id
-    environment = var.environment
-    project = var.project
+  source            = "../../../../modules/aws/nat_gateway"
+  eip_allocation_id = module.eip.eip_allocation_id
+  public_subnet_id  = module.subnets.public_subnet_ids["public-1"]
+  igw_dependency    = module.igw.igw_id
+  environment       = var.environment
+  project           = var.project
 }
 
 module "route_tables" {
-    source = "../../../../modules/aws/route_tables"
-    vpc_id = module.vpc.vpc_id
-    igw_id = module.igw.igw_id
-    nat_gateway_id = module.nat_gateway.nat_gateway_id
-    environment = var.environment
-    project = var.project
+  source         = "../../../../modules/aws/route_tables"
+  vpc_id         = module.vpc.vpc_id
+  igw_id         = module.igw.igw_id
+  nat_gateway_id = module.nat_gateway.nat_gateway_id
+  environment    = var.environment
+  project        = var.project
 }
 
 module "route_table_association" {
-    source = "../../../../modules/aws/route_table_association"
-    public_subnet_ids = module.subnets.public_subnet_ids
-    private_subnet_ids = module.subnets.private_subnet_ids
-    public_route_table_id = module.route_tables.public_route_table_id
-    private_route_table_id = module.route_tables.private_route_table_id
+  source                 = "../../../../modules/aws/route_table_association"
+  public_subnet_ids      = module.subnets.public_subnet_ids
+  private_subnet_ids     = module.subnets.private_subnet_ids
+  public_route_table_id  = module.route_tables.public_route_table_id
+  private_route_table_id = module.route_tables.private_route_table_id
 }
 
 
 // --------- Security Groups ------------------
 module "alb_sg" {
-    source = "../../../../modules/aws/security_groups"
-    name = "abl"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/security_groups"
+  name        = "abl"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 
-    ingress_rules = [
-        {
-            from_port = 80
-            to_port = 80
-            protocol = "tcp"
-            description = "Allow HTTP traffic"
-            cidr_blocks = ["0.0.0.0/0"]
-        },
-        {
-            from_port = 443
-            to_port = 443
-            protocol = "tcp"
-            description = "Allow HTTPS traffic"
-            cidr_blocks = ["0.0.0.0/0"]
-        },
-        {
-            from_port = 8443
-            to_port = 8443
-            protocol = "tcp"
-            description = "Allow HTTPS dashboard traffic"
-            cidr_blocks = ["0.0.0.0/0"]
-        }
-    ]
+  ingress_rules = [
+    {
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      description = "Allow HTTP traffic"
+      cidr_blocks = ["0.0.0.0/0"]
+    },
+    {
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      description = "Allow HTTPS traffic"
+      cidr_blocks = ["0.0.0.0/0"]
+    },
+    {
+      from_port   = 8443
+      to_port     = 8443
+      protocol    = "tcp"
+      description = "Allow HTTPS dashboard traffic"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 
-    egress_rules = [
-        {
-            from_port = 0
-            to_port = 0
-            protocol = "-1"
-            description = ""
-            cidr_blocks = ["0.0.0.0/0"]
-        }
-    ]
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      description = ""
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 }
 
 module "app_sg" {
-    source = "../../../../modules/aws/security_groups"
-    name = "app"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/security_groups"
+  name        = "app"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 
-    ingress_rules = [
-        {
-            from_port = 8080
-            to_port = 8080
-            protocol = "tcp"
-            description = "Allow traffic from ALB"
-            cidr_blocks = []
-            security_groups = [
-                module.alb_sg.security_group_id
-            ]
-        },
-        {
-            from_port = 8091
-            to_port = 8091
-            protocol = "tcp"
-            description = "Allow dashboard traffic from ALB"
-            cidr_blocks = []
-            security_groups = [
-                module.alb_sg.security_group_id
-            ]
-        }
-    ]
+  ingress_rules = [
+    {
+      from_port   = 3000
+      to_port     = 3000
+      protocol    = "tcp"
+      description = "Allow frontend traffic from ALB"
+      cidr_blocks = []
+      security_groups = [
+        module.alb_sg.security_group_id
+      ]
+    },
+    {
+      from_port   = 8080
+      to_port     = 8080
+      protocol    = "tcp"
+      description = "Allow traffic from ALB"
+      cidr_blocks = []
+      security_groups = [
+        module.alb_sg.security_group_id
+      ]
+    },
+    {
+      from_port   = 8091
+      to_port     = 8091
+      protocol    = "tcp"
+      description = "Allow dashboard traffic from ALB"
+      cidr_blocks = []
+      security_groups = [
+        module.alb_sg.security_group_id
+      ]
+    }
+  ]
 
-    egress_rules = [
-        {
-            from_port = 0
-            to_port = 0
-            protocol = "-1"
-            description = ""
-            cidr_blocks = ["0.0.0.0/0"]
-            security_groups = []
-        }
-    ]
+  egress_rules = [
+    {
+      from_port       = 0
+      to_port         = 0
+      protocol        = "-1"
+      description     = ""
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+    }
+  ]
 }
 
 module "redis-sg" {
-    source = "../../../../modules/aws/security_groups"
-    name = "redis"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/security_groups"
+  name        = "redis"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 
-    ingress_rules = [
-        {
-            from_port = 6379
-            to_port = 6379
-            protocol = "tcp"
-            description = "Allow traffic from Application"
-            cidr_blocks = []
-            security_groups = [
-                module.app_sg.security_group_id
-            ]
-        }
-    ]
+  ingress_rules = [
+    {
+      from_port   = 6379
+      to_port     = 6379
+      protocol    = "tcp"
+      description = "Allow traffic from Application"
+      cidr_blocks = []
+      security_groups = [
+        module.app_sg.security_group_id
+      ]
+    }
+  ]
 
-    egress_rules = [
-        {
-            from_port = 0
-            to_port = 0
-            protocol = "-1"
-            description = ""
-            cidr_blocks = ["0.0.0.0/0"]
-            security_groups = []
-        }
-    ]
+  egress_rules = [
+    {
+      from_port       = 0
+      to_port         = 0
+      protocol        = "-1"
+      description     = ""
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+    }
+  ]
 }
 
 module "db-sg" {
-    source = "../../../../modules/aws/security_groups"
-    name = "aurora"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/security_groups"
+  name        = "aurora"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 
-    ingress_rules = [
-        {
-            from_port = 5432
-            to_port = 5432
-            protocol = "tcp"
-            description = "Allow traffic from Application"
-            cidr_blocks = []
-            security_groups = [
-                module.app_sg.security_group_id
-            ]
-        },
-        {
-            from_port = 5432
-            to_port = 5432
-            protocol = "tcp"
-            description = "Allow traffic from Bastion"
-            cidr_blocks = []
-            security_groups = [
-                module.bastion_sg.security_group_id
-            ]
-        }
-    ]
+  ingress_rules = [
+    {
+      from_port   = 5432
+      to_port     = 5432
+      protocol    = "tcp"
+      description = "Allow traffic from Application"
+      cidr_blocks = []
+      security_groups = [
+        module.app_sg.security_group_id
+      ]
+    },
+    {
+      from_port   = 5432
+      to_port     = 5432
+      protocol    = "tcp"
+      description = "Allow traffic from Bastion"
+      cidr_blocks = []
+      security_groups = [
+        module.bastion_sg.security_group_id
+      ]
+    }
+  ]
 
-    egress_rules = [
-        {
-            from_port = 0
-            to_port = 0
-            protocol = "-1"
-            description = ""
-            cidr_blocks = ["0.0.0.0/0"]
-            security_groups = []
-        }
-    ]
+  egress_rules = [
+    {
+      from_port       = 0
+      to_port         = 0
+      protocol        = "-1"
+      description     = ""
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+    }
+  ]
 }
 
 module "bastion_sg" {
-    source = "../../../../modules/aws/security_groups"
-    name = "bastion"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/security_groups"
+  name        = "bastion"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 
-    ingress_rules = [
-        {
-            from_port = 22
-            to_port = 22
-            protocol = "tcp"
-            description = "Allow SSH traffic"
-            cidr_blocks = ["0.0.0.0/0"]
-        }
-    ]
+  ingress_rules = [
+    {
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      description = "Allow SSH traffic"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 
-    egress_rules = [
-        {
-            from_port = 0
-            to_port = 0
-            protocol = "-1"
-            description = "Allow all outbound"
-            cidr_blocks = ["0.0.0.0/0"]
-        }
-    ]
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      description = "Allow all outbound"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 }
 //-----------------------------------
 
 // SQS Queues
 module "sqs_dlq" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-dlq"
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/sqs"
+  name        = "app-dlq"
+  environment = var.environment
+  project     = var.project
 }
 
 module "sqs" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-queue"
-    environment = var.environment
-    project = var.project
-    dlq_arn = module.sqs_dlq.queue_arn
+  source      = "../../../../modules/aws/sqs"
+  name        = "app-queue"
+  environment = var.environment
+  project     = var.project
+  dlq_arn     = module.sqs_dlq.queue_arn
 }
 
 module "sqs_delay" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-delay-queue"
-    environment = var.environment
-    project = var.project
-    delay_seconds = 10
-    visibility_timeout_seconds = 30
-    dlq_arn = module.sqs_delay_dlq.queue_arn
+  source                     = "../../../../modules/aws/sqs"
+  name                       = "app-delay-queue"
+  environment                = var.environment
+  project                    = var.project
+  delay_seconds              = 10
+  visibility_timeout_seconds = 30
+  dlq_arn                    = module.sqs_delay_dlq.queue_arn
 }
 
 module "sqs_delay_dlq" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-delay-dlq"
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/sqs"
+  name        = "app-delay-dlq"
+  environment = var.environment
+  project     = var.project
 }
 
 module "sqs_render_dlq" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-render-dlq"
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/sqs"
+  name        = "app-render-dlq"
+  environment = var.environment
+  project     = var.project
 }
 
 module "sqs_render" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-render-queue"
-    environment = var.environment
-    project = var.project
-    visibility_timeout_seconds = 90
-    max_receive_count = 3
-    dlq_arn = module.sqs_render_dlq.queue_arn
+  source                     = "../../../../modules/aws/sqs"
+  name                       = "app-render-queue"
+  environment                = var.environment
+  project                    = var.project
+  visibility_timeout_seconds = 90
+  max_receive_count          = 3
+  dlq_arn                    = module.sqs_render_dlq.queue_arn
 }
 
 module "sqs_scan_dlq" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-scan-dlq"
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/sqs"
+  name        = "app-scan-dlq"
+  environment = var.environment
+  project     = var.project
 }
 
 module "sqs_scan" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-scan-queue"
-    environment = var.environment
-    project = var.project
-    visibility_timeout_seconds = 90
-    max_receive_count = 3
-    dlq_arn = module.sqs_scan_dlq.queue_arn
+  source                     = "../../../../modules/aws/sqs"
+  name                       = "app-scan-queue"
+  environment                = var.environment
+  project                    = var.project
+  visibility_timeout_seconds = 90
+  max_receive_count          = 3
+  dlq_arn                    = module.sqs_scan_dlq.queue_arn
 }
 //--------------------------------------
 
 
 // Aurora Serverless v2
 module "aurora" {
-    source = "../../../../modules/aws/aurora"
-    cluster_identifier = "aurora-db"
+  source             = "../../../../modules/aws/aurora"
+  cluster_identifier = "aurora-db"
 
-    instance_class = "db.serverless"
-    num_instances = 1
+  instance_class = "db.serverless"
+  num_instances  = 1
 
-    engine = "aurora-postgresql"
-    engine_version = "15.15"
-    database_name = "stg_app_db"
-    master_username = var.master_db_user_name
-    master_password = var.master_db_user_pass
+  engine          = "aurora-postgresql"
+  engine_version  = "15.15"
+  database_name   = "stg_app_db"
+  master_username = var.master_db_user_name
+  master_password = var.master_db_user_pass
 
-    subnet_ids = [
-        module.subnets.private_subnet_ids["db-1"],
-        module.subnets.private_subnet_ids["db-2"]
-    ]
+  subnet_ids = [
+    module.subnets.private_subnet_ids["db-1"],
+    module.subnets.private_subnet_ids["db-2"]
+  ]
 
-    security_group_ids = [
-        module.db-sg.security_group_id
-    ]
+  security_group_ids = [
+    module.db-sg.security_group_id
+  ]
 
-    environment = var.environment
-    project = var.project
+  environment = var.environment
+  project     = var.project
 }
 //----------------------------------
 
 // Redis
 module "redis" {
-    source = "../../../../modules/aws/elasticache"
-    name = "cache"
-    engine = "redis"
-    node_type = "cache.t3.micro"
-    num_cache_clusters = 1
-    transit_encryption = false
-    at_rest_encryption = false
+  source             = "../../../../modules/aws/elasticache"
+  name               = "cache"
+  engine             = "redis"
+  node_type          = "cache.t3.micro"
+  num_cache_clusters = 1
+  transit_encryption = false
+  at_rest_encryption = false
 
-    subnet_ids = [
-        module.subnets.private_subnet_ids["db-1"],
-        module.subnets.private_subnet_ids["db-2"]
-    ]
+  subnet_ids = [
+    module.subnets.private_subnet_ids["db-1"],
+    module.subnets.private_subnet_ids["db-2"]
+  ]
 
-    security_group_ids = [
-        module.redis-sg.security_group_id
-    ]
+  security_group_ids = [
+    module.redis-sg.security_group_id
+  ]
 
-    environment = var.environment
-    project = var.project
+  environment = var.environment
+  project     = var.project
 }
 //----------------------------
 
@@ -393,136 +403,166 @@ module "redis" {
 
 # 1. Default target group (webhook / fallback)
 module "target_group" {
-    source = "../../../../modules/aws/target_group"
-    name = "app-tg-8080"
-    port = 8080
-    protocol = "HTTP"
-    target_type = "ip"
-    vpc_id = module.vpc.vpc_id
-    health_check_path = var.health_check_path
-    environment = var.environment
-    project = var.project
+  source            = "../../../../modules/aws/target_group"
+  name              = "app-tg-8080"
+  port              = 8080
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = var.health_check_path
+  environment       = var.environment
+  project           = var.project
 }
 
 # 2. WebAPI target group (routes /v1/* on port 443)
 module "target_group_webapi" {
-    source = "../../../../modules/aws/target_group"
-    name_override = "stg-sammmm-tg-webapi-8080"
-    name = "tg-webapi-8080"
-    port = 8080
-    protocol = "HTTP"
-    target_type = "ip"
-    vpc_id = module.vpc.vpc_id
-    health_check_path = var.health_check_path
-    environment = var.environment
-    project = var.project
+  source            = "../../../../modules/aws/target_group"
+  name_override     = "stg-sammmm-tg-webapi-8080"
+  name              = "tg-webapi-8080"
+  port              = 8080
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = var.health_check_path
+  environment       = var.environment
+  project           = var.project
 }
 
 # 3. WebChat target group (routes /v1/ws/* on port 443)
 module "target_group_webchat" {
-    source = "../../../../modules/aws/target_group"
-    name_override = "stg-sammmm-tg-webchat-8080"
-    name = "tg-webchat-8080"
-    port = 8080
-    protocol = "HTTP"
-    target_type = "ip"
-    vpc_id = module.vpc.vpc_id
-    health_check_path = var.health_check_path
-    environment = var.environment
-    project = var.project
+  source            = "../../../../modules/aws/target_group"
+  name_override     = "stg-sammmm-tg-webchat-8080"
+  name              = "tg-webchat-8080"
+  port              = 8080
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = var.health_check_path
+  environment       = var.environment
+  project           = var.project
 }
 
 # 4. Dashboard target group (port 8443 listener → port 8091 on container)
 module "target_group_dashboard" {
-    source = "../../../../modules/aws/target_group"
-    name_override = "staging-SAMMMM-app-tg-dash-8091"
-    name = "app-tg-dash-8091"
-    port = 8091
-    protocol = "HTTP"
-    target_type = "ip"
-    vpc_id = module.vpc.vpc_id
-    health_check_path = var.health_check_path
-    environment = var.environment
-    project = var.project
+  source            = "../../../../modules/aws/target_group"
+  name_override     = "staging-SAMMMM-app-tg-dash-8091"
+  name              = "app-tg-dash-8091"
+  port              = 8091
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = var.health_check_path
+  environment       = var.environment
+  project           = var.project
+}
+
+# 4.5. Frontend target group (routes /* on port 443)
+module "target_group_frontend" {
+  source            = "../../../../modules/aws/target_group"
+  name_override     = "stg-sammmm-tg-frontend-3000"
+  name              = "tg-frontend-3000"
+  port              = 3000
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = var.health_check_path
+  environment       = var.environment
+  project           = var.project
 }
 
 # 5. Application Load Balancer (port 443 HTTPS, default → webhook/fallback TG)
 module "alb" {
-    source = "../../../../modules/aws/alb"
-    name = "app-alb"
-    internal = false
-    security_group_ids = [
-        module.alb_sg.security_group_id
-    ]
+  source   = "../../../../modules/aws/alb"
+  name     = "app-alb"
+  internal = false
+  security_group_ids = [
+    module.alb_sg.security_group_id
+  ]
 
-    subnet_ids = [
-        module.subnets.public_subnet_ids["public-1"],
-        module.subnets.public_subnet_ids["public-2"]
-    ]
+  subnet_ids = [
+    module.subnets.public_subnet_ids["public-1"],
+    module.subnets.public_subnet_ids["public-2"]
+  ]
 
-    http_port = 443
-    http_protocol = "HTTPS"
-    http_certificate_arn = "arn:aws:acm:ap-south-1:515966492403:certificate/390cbef8-cfb1-4a5a-81aa-f2a463724290"
-    ssl_policy = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+  http_port            = 443
+  http_protocol        = "HTTPS"
+  http_certificate_arn = "arn:aws:acm:ap-south-1:515966492403:certificate/390cbef8-cfb1-4a5a-81aa-f2a463724290"
+  ssl_policy           = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
 
-    http_default_action = "forward"
-    http_target_group_arn = module.target_group.target_group_arn
-    environment = var.environment
-    project = var.project
+  http_default_action   = "forward"
+  http_target_group_arn = module.target_group.target_group_arn
+  environment           = var.environment
+  project               = var.project
 }
 
 # 6. ALB Listener Rules (path-based routing on port 443)
 # Priority 5 must come before 10 so /v1/ws/* is matched before /v1/*
 resource "aws_lb_listener_rule" "webchat" {
-    listener_arn = module.alb.http_listener_arn
-    priority     = 5
+  listener_arn = module.alb.http_listener_arn
+  priority     = 5
 
-    action {
-        type             = "forward"
-        target_group_arn = module.target_group_webchat.target_group_arn
-    }
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_webchat.target_group_arn
+  }
 
-    condition {
-        path_pattern {
-            values = ["/v1/ws/*"]
-        }
+  condition {
+    path_pattern {
+      values = ["/v1/ws/*"]
     }
+  }
 }
 
 resource "aws_lb_listener_rule" "webapi" {
-    listener_arn = module.alb.http_listener_arn
-    priority     = 10
+  listener_arn = module.alb.http_listener_arn
+  priority     = 10
 
-    action {
-        type             = "forward"
-        target_group_arn = module.target_group_webapi.target_group_arn
-    }
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_webapi.target_group_arn
+  }
 
-    condition {
-        path_pattern {
-            values = ["/v1/*"]
-        }
+  condition {
+    path_pattern {
+      values = ["/v1/*"]
     }
+  }
+}
+
+resource "aws_lb_listener_rule" "frontend" {
+  listener_arn = module.alb.http_listener_arn
+  priority     = 50
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_frontend.target_group_arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/*"]
+    }
+  }
 }
 
 # 7. Dashboard listener (port 8443 → dashboard TG on port 8091)
 resource "aws_lb_listener" "dashboard" {
-    load_balancer_arn = module.alb.alb_arn
-    port              = 8443
-    protocol          = "HTTPS"
-    ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
-    certificate_arn   = "arn:aws:acm:ap-south-1:515966492403:certificate/390cbef8-cfb1-4a5a-81aa-f2a463724290"
+  load_balancer_arn = module.alb.alb_arn
+  port              = 8443
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+  certificate_arn   = "arn:aws:acm:ap-south-1:515966492403:certificate/390cbef8-cfb1-4a5a-81aa-f2a463724290"
 
-    default_action {
-        type             = "forward"
-        target_group_arn = module.target_group_dashboard.target_group_arn
-    }
+  default_action {
+    type             = "forward"
+    target_group_arn = module.target_group_dashboard.target_group_arn
+  }
 
-    tags = {
-        Name        = "${var.environment}-${var.project}-dashboard-listener"
-        Environment = var.environment
-        Project     = var.project
-    }
+  tags = {
+    Name        = "${var.environment}-${var.project}-dashboard-listener"
+    Environment = var.environment
+    Project     = var.project
+  }
 }
 //--------------------------
 
@@ -530,20 +570,29 @@ resource "aws_lb_listener" "dashboard" {
 # Extracted from the former ecs_fargate module so the cluster can be shared
 # across all services without being tied to a single service definition.
 module "ecs_cluster" {
-    source       = "../../../../modules/aws/ecs_cluster"
-    cluster_name = "${var.environment}-${var.project}-app-sammmm"
-    environment  = var.environment
-    project      = var.project
+  source       = "../../../../modules/aws/ecs_cluster"
+  cluster_name = "${var.environment}-${var.project}-app-sammmm"
+  environment  = var.environment
+  project      = var.project
 }
 
 // ECR
 module "ecr" {
-    source = "../../../../modules/aws/ecr"
-    name = "sammmm-backend"
-    environment = var.environment
-    project = var.project
-    image_tag_mutability = "IMMUTABLE"
-    scan_on_push = false
+  source               = "../../../../modules/aws/ecr"
+  name                 = "sammmm-backend"
+  environment          = var.environment
+  project              = var.project
+  image_tag_mutability = "IMMUTABLE"
+  scan_on_push         = false
+}
+
+module "ecr_frontend" {
+  source               = "../../../../modules/aws/ecr"
+  name                 = "sam-frontend"
+  environment          = var.environment
+  project              = var.project
+  image_tag_mutability = "IMMUTABLE"
+  scan_on_push         = false
 }
 
 // =============================================================
@@ -746,11 +795,11 @@ module "webhook_task_exec_role" {
   source             = "../../../../modules/aws/iam_role"
   name               = "${var.environment}-${var.project}-sammmm-webhook-task-exec-role"
   assume_role_policy = local.ecs_task_assume_role_policy
-  policy_arns        = [
+  policy_arns = [
     "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
   ]
-  environment        = var.environment
-  project            = var.project
+  environment = var.environment
+  project     = var.project
 }
 
 module "webhook_task_task_role" {
@@ -766,7 +815,7 @@ module "webhook_task_task_role" {
 resource "aws_iam_policy" "webhook_policy" {
   name        = "${var.environment}-${var.project}-webhook-policy"
   description = "Permissions for Sammmm webhook service to access SQS and Secrets Manager"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
@@ -801,12 +850,12 @@ resource "aws_iam_role_policy_attachment" "webhook_attachment" {
 resource "aws_iam_policy" "ingest_policy" {
   name        = "${var.environment}-${var.project}-ingest-policy"
   description = "Permissions for Sammmm ingest service to process inbound and queue to flush SQS"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "sqs:ReceiveMessage",
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes",
@@ -846,12 +895,12 @@ resource "aws_iam_role_policy_attachment" "ingest_attachment" {
 resource "aws_iam_policy" "flush_policy" {
   name        = "${var.environment}-${var.project}-flush-policy"
   description = "Permissions for Sammmm flush and migrate service to read flush SQS and Secrets Manager"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "sqs:ReceiveMessage",
           "sqs:DeleteMessage",
           "sqs:SendMessage",
@@ -888,17 +937,17 @@ module "ecs_execution_role" {
   source             = "../../../../modules/aws/iam_role"
   name               = "${var.environment}-${var.project}-ecs-execution-role"
   assume_role_policy = local.ecs_task_assume_role_policy
-  policy_arns        = [
+  policy_arns = [
     "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
   ]
-  environment        = var.environment
-  project            = var.project
+  environment = var.environment
+  project     = var.project
 }
 
 resource "aws_iam_policy" "ecs_execution_secrets_policy" {
   name        = "${var.environment}-${var.project}-ecs-execution-secrets"
   description = "Allows ECS Execution Role to fetch application secrets from Secrets Manager at startup and manage log groups"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
@@ -907,8 +956,8 @@ resource "aws_iam_policy" "ecs_execution_secrets_policy" {
         Resource = ["*"]
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
@@ -953,24 +1002,24 @@ module "ecs_ingest" {
   desired_count      = 1
   launch_type        = "FARGATE"
 
-  subnet_ids         = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
   security_group_ids = [
     module.app_sg.security_group_id
   ]
-  assign_public_ip   = false
+  assign_public_ip = false
 
   container_definitions = jsonencode([
     {
-      name      = "ingest"
-      image     = "${module.ecr.repository_url}:latest"
-      essential = true
-      command   = ["ingest"]
+      name         = "ingest"
+      image        = "${module.ecr.repository_url}:latest"
+      essential    = true
+      command      = ["ingest"]
       portMappings = []
-      environment = local.sam_env_vars
-      secrets     = local.sam_secrets
+      environment  = local.sam_env_vars
+      secrets      = local.sam_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -1000,24 +1049,24 @@ module "ecs_flush" {
   desired_count      = 1
   launch_type        = "FARGATE"
 
-  subnet_ids         = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
   security_group_ids = [
     module.app_sg.security_group_id
   ]
-  assign_public_ip   = false
+  assign_public_ip = false
 
   container_definitions = jsonencode([
     {
-      name      = "flush"
-      image     = "${module.ecr.repository_url}:latest"
-      essential = true
-      command   = ["flush"]
+      name         = "flush"
+      image        = "${module.ecr.repository_url}:latest"
+      essential    = true
+      command      = ["flush"]
       portMappings = []
-      environment = local.sam_env_vars
-      secrets     = local.sam_secrets
+      environment  = local.sam_env_vars
+      secrets      = local.sam_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -1047,14 +1096,14 @@ module "ecs_webapi" {
   desired_count      = 1
   launch_type        = "FARGATE"
 
-  subnet_ids         = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
   security_group_ids = [
     module.app_sg.security_group_id
   ]
-  assign_public_ip   = false
+  assign_public_ip = false
 
   target_group_arn = module.target_group_webapi.target_group_arn
   container_name   = "webapi"
@@ -1104,14 +1153,14 @@ module "ecs_webchat" {
   desired_count      = 1
   launch_type        = "FARGATE"
 
-  subnet_ids         = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
   security_group_ids = [
     module.app_sg.security_group_id
   ]
-  assign_public_ip   = false
+  assign_public_ip = false
 
   target_group_arn = module.target_group_webchat.target_group_arn
   container_name   = "webchat"
@@ -1161,14 +1210,14 @@ module "ecs_dashboard" {
   desired_count      = 1
   launch_type        = "FARGATE"
 
-  subnet_ids         = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
   security_group_ids = [
     module.app_sg.security_group_id
   ]
-  assign_public_ip   = false
+  assign_public_ip = false
 
   target_group_arn = module.target_group_dashboard.target_group_arn
   container_name   = "dashboard"
@@ -1218,24 +1267,24 @@ module "ecs_pdf" {
   desired_count      = 1
   launch_type        = "FARGATE"
 
-  subnet_ids         = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
   security_group_ids = [
     module.app_sg.security_group_id
   ]
-  assign_public_ip   = false
+  assign_public_ip = false
 
   container_definitions = jsonencode([
     {
-      name      = "pdf"
-      image     = "${module.ecr.repository_url}:latest"
-      essential = true
-      command   = ["pdf"]
+      name         = "pdf"
+      image        = "${module.ecr.repository_url}:latest"
+      essential    = true
+      command      = ["pdf"]
       portMappings = []
-      environment = local.sam_env_vars
-      secrets     = local.sam_worker_v2_secrets
+      environment  = local.sam_env_vars
+      secrets      = local.sam_worker_v2_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -1265,24 +1314,24 @@ module "ecs_scan" {
   desired_count      = 1
   launch_type        = "FARGATE"
 
-  subnet_ids         = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
   security_group_ids = [
     module.app_sg.security_group_id
   ]
-  assign_public_ip   = false
+  assign_public_ip = false
 
   container_definitions = jsonencode([
     {
-      name      = "scan"
-      image     = "${module.ecr.repository_url}:latest"
-      essential = true
-      command   = ["scan"]
+      name         = "scan"
+      image        = "${module.ecr.repository_url}:latest"
+      essential    = true
+      command      = ["scan"]
       portMappings = []
-      environment = local.sam_env_vars
-      secrets     = local.sam_worker_v2_secrets
+      environment  = local.sam_env_vars
+      secrets      = local.sam_worker_v2_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -1308,8 +1357,8 @@ data "aws_ssm_parameter" "al2023_ami" {
 }
 
 module "bastion_role" {
-  source             = "../../../../modules/aws/iam_role"
-  name               = "${var.environment}-${var.project}-bastion-role"
+  source = "../../../../modules/aws/iam_role"
+  name   = "${var.environment}-${var.project}-bastion-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -1321,8 +1370,8 @@ module "bastion_role" {
   policy_arns = [
     "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   ]
-  environment        = var.environment
-  project            = var.project
+  environment = var.environment
+  project     = var.project
 }
 
 resource "aws_iam_instance_profile" "bastion_profile" {
@@ -1342,4 +1391,57 @@ module "bastion_host" {
   key_name             = var.bastion_key_name
   environment          = var.environment
   project              = var.project
+}
+
+# Frontend — accessed via ALB root path /*
+module "ecs_frontend" {
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "${var.environment}-${var.project}-sam-frontend"
+  family             = "${var.environment}-${var.project}-sam-frontend-task"
+  environment        = var.environment
+  project            = var.project
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  cpu                = "256"
+  memory             = "512"
+  execution_role_arn = module.webhook_task_exec_role.role_arn
+  task_role_arn      = module.webhook_task_task_role.role_arn
+  desired_count      = 1
+  launch_type        = "FARGATE"
+
+  subnet_ids = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip = false
+
+  target_group_arn = module.target_group_frontend.target_group_arn
+  container_name   = "frontend"
+  container_port   = 3000
+
+  container_definitions = jsonencode([
+    {
+      name      = "frontend"
+      image     = "${module.ecr_frontend.repository_url}:latest"
+      essential = true
+      portMappings = [
+        {
+          containerPort = 3000
+          hostPort      = 3000
+          protocol      = "tcp"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/staging-sammmm-frontend"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
 }
