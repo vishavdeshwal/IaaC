@@ -1,5 +1,5 @@
 resource "aws_lb_target_group" "tg" {
-    name                 = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}-tg"
+    name                 = var.use_name_prefix ? null : (var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}-tg")
     port                 = var.port
     protocol             = var.protocol
     target_type          = var.target_type

@@ -108,3 +108,9 @@ variable "name_override" {
     default = null
 }
 
+variable "use_name_prefix" {
+    type        = bool
+    default     = false
+    description = "If true, omits explicit name to let AWS autogenerate it (useful for recreate replacements)"
+}
+

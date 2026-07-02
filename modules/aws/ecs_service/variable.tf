@@ -69,11 +69,13 @@ variable "enable_execute_command" {
 
 variable "subnet_ids" {
   type        = list(string)
+  default     = null
   description = "List of private subnets for ECS network configuration"
 }
 
 variable "security_group_ids" {
   type        = list(string)
+  default     = null
   description = "List of security groups for ECS network configuration"
 }
 
@@ -139,3 +141,9 @@ variable "health_check_grace_period_seconds" {
   description = "Seconds to ignore failing load balancer health checks on newly instantiated tasks"
 }
 
+
+variable "network_mode" {
+  type        = string
+  default     = "awsvpc"
+  description = "The network mode for the task definition (e.g. awsvpc, bridge, host)"
+}

@@ -1,7 +1,7 @@
 resource "aws_ecs_task_definition" "task" {
   count                    = var.task_definition_arn_override == null ? 1 : 0
   family                   = var.family
-  network_mode             = "awsvpc"
+  network_mode             = var.network_mode
   requires_compatibilities = var.requires_compatibilities
   cpu                      = var.cpu
   memory                   = var.memory
@@ -22,17 +22,20 @@ resource "aws_ecs_service" "service" {
   task_definition                    = var.task_definition_arn_override != null ? var.task_definition_arn_override : aws_ecs_task_definition.task[0].arn
   desired_count                      = var.desired_count
   launch_type                        = var.launch_type
-  platform_version                   = var.platform_version
+  platform_version                   = var.launch_type == "EC2" ? null : var.platform_version
   scheduling_strategy                = "REPLICA"
   availability_zone_rebalancing      = var.availability_zone_rebalancing
   enable_ecs_managed_tags            = var.enable_ecs_managed_tags
   enable_execute_command             = var.enable_execute_command
   health_check_grace_period_seconds  = var.target_group_arn != null ? var.health_check_grace_period_seconds : null
 
-  network_configuration {
-    subnets          = var.subnet_ids
-    security_groups  = var.security_group_ids
-    assign_public_ip = var.assign_public_ip
+  dynamic "network_configuration" {
+    for_each = var.network_mode == "awsvpc" ? [1] : []
+    content {
+      subnets          = var.subnet_ids
+      security_groups  = var.security_group_ids
+      assign_public_ip = var.assign_public_ip
+    }
   }
 
   dynamic "load_balancer" {
