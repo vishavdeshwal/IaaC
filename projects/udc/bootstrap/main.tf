@@ -17,17 +17,15 @@ provider "aws" {
   profile = var.aws_profile
 }
 
-# Generate a random integer to guarantee S3 bucket global uniqueness
+# It generates a random integer for s3 bucket to make it global unique
 resource "random_integer" "suffix" {
   min = 100000
   max = 999999
 }
 
-# The S3 bucket to store all environment state files
 resource "aws_s3_bucket" "state" {
   bucket = "${lower(var.project)}-terraform-state-${random_integer.suffix.result}"
 
-  # Protect the state bucket from accidental deletion
   lifecycle {
     prevent_destroy = true
   }
@@ -39,7 +37,7 @@ resource "aws_s3_bucket" "state" {
   }
 }
 
-# Enable versioning so we have full backup history of all state changes
+#Enable versioning
 resource "aws_s3_bucket_versioning" "state_versioning" {
   bucket = aws_s3_bucket.state.id
   versioning_configuration {
@@ -47,7 +45,7 @@ resource "aws_s3_bucket_versioning" "state_versioning" {
   }
 }
 
-# Enable server-side encryption by default using S3 Managed Keys (SSE-S3)
+#Enable SSE (server-side-encryption)
 resource "aws_s3_bucket_server_side_encryption_configuration" "state_encryption" {
   bucket = aws_s3_bucket.state.id
 
@@ -58,7 +56,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state_encryption"
   }
 }
 
-# Explicitly block all public access to the state bucket (essential security)
+#Block all public access to state bucket
 resource "aws_s3_bucket_public_access_block" "state_public_block" {
   bucket = aws_s3_bucket.state.id
 
@@ -68,10 +66,14 @@ resource "aws_s3_bucket_public_access_block" "state_public_block" {
   restrict_public_buckets = true
 }
 
-# Object ownership controls
+
+#Object ownership
 resource "aws_s3_bucket_ownership_controls" "state_ownership" {
-  bucket = aws_s3_bucket.state.id
-  rule {
-    object_ownership = "BucketOwnerPreferred"
-  }
+    bucket = aws_s3_bucket.state.id
+
+    rule {
+        object_ownership = "BucketOwnerPreferred"
+    }
 }
+
+
