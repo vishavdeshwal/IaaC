@@ -47,36 +47,26 @@ variable "private_subnets" {
   }))
 }
 
-# --- Container Definitions ---
-
-variable "container_def_be" {
-  type        = string
-  description = "JSON string defining the backend container"
+variable "backend_secrets" {
+  description = "A map of sensitive environment variables for the backend"
+  type        = map(string)
 }
 
-variable "container_def_truedesk" {
-  type        = string
-  description = "JSON string defining the truedesk container"
+variable "frontend_secrets" {
+  description = "A map of sensitive environment variables for the frontends"
+  type        = map(string)
 }
 
-variable "container_def_master_web" {
+variable "docdb_master_username" {
   type        = string
-  description = "JSON string defining the master-web container"
+  description = "Master username for DocumentDB"
+  default     = "udcadmin"
 }
 
-variable "container_def_master_admin" {
+variable "docdb_master_password" {
   type        = string
-  description = "JSON string defining the master-admin container"
-}
-
-variable "container_def_student_web" {
-  type        = string
-  description = "JSON string defining the student-web container"
-}
-
-variable "container_def_instructor_web" {
-  type        = string
-  description = "JSON string defining the instructor-web container"
+  description = "Master password for DocumentDB"
+  sensitive   = true
 }
 
 variable "ses_email_address" {
