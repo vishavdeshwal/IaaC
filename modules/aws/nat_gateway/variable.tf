@@ -1,20 +1,20 @@
 variable "eip_allocation_id" {
-    type = string
+  type = string
 }
 
 variable "public_subnet_id" {
-    type = string
+  type = string
 }
 
 variable "environment" {
-    type = string
+  type = string
 }
 
 variable "project" {
-    type = string
+  type = string
 }
 
 variable "igw_dependency" {
-    type = string
+  type = string
 }
 

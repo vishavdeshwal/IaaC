@@ -64,10 +64,10 @@ variable "custom_rules" {
 
 variable "branches" {
   type = map(object({
-    stage                     = string
-    enable_auto_build         = optional(bool, true)
+    stage                       = string
+    enable_auto_build           = optional(bool, true)
     enable_pull_request_preview = optional(bool, false)
-    environment_variables     = optional(map(string), {})
+    environment_variables       = optional(map(string), {})
   }))
   default     = {}
   description = "Map of branch_name => branch config to create"

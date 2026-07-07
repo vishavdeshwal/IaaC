@@ -465,7 +465,7 @@ module "target_group_frontend" {
   protocol          = "HTTP"
   target_type       = "ip"
   vpc_id            = module.vpc.vpc_id
-  health_check_path = var.health_check_path
+  health_check_path = "/"
   environment       = var.environment
   project           = var.project
 }
@@ -1407,6 +1407,10 @@ module "ecs_frontend" {
   task_role_arn      = module.webhook_task_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
+
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+  health_check_grace_period_seconds  = 60
 
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],

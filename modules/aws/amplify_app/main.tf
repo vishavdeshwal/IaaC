@@ -37,7 +37,7 @@ resource "aws_amplify_branch" "branches" {
   branch_name = each.key
   stage       = each.value.stage
 
-  enable_auto_build     = lookup(each.value, "enable_auto_build", true)
+  enable_auto_build           = lookup(each.value, "enable_auto_build", true)
   enable_pull_request_preview = lookup(each.value, "enable_pull_request_preview", false)
 
   environment_variables = lookup(each.value, "environment_variables", {})

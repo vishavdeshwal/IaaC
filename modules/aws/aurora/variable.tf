@@ -17,15 +17,15 @@ variable "engine_version" {
 
 
 variable "serverlessv2_min_capacity" {
-    type = number
-    default = 0.5
-    description = "Minimum Aurora Capacity Units (ACUs) for Serverless v2"
+  type        = number
+  default     = 0.5
+  description = "Minimum Aurora Capacity Units (ACUs) for Serverless v2"
 }
 
 variable "serverlessv2_max_capacity" {
-    type = number
-    default = 1
-    description = "Maximum Aurora Capacity Units (ACUs) for Serverless v2"
+  type        = number
+  default     = 1
+  description = "Maximum Aurora Capacity Units (ACUs) for Serverless v2"
 }
 
 variable "instance_class" {

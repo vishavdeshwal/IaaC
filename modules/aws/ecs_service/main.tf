@@ -32,6 +32,8 @@ resource "aws_ecs_service" "service" {
   enable_ecs_managed_tags            = var.enable_ecs_managed_tags
   enable_execute_command             = var.enable_execute_command
   health_check_grace_period_seconds  = var.target_group_arn != null ? var.health_check_grace_period_seconds : null
+  deployment_minimum_healthy_percent = var.deployment_minimum_healthy_percent
+  deployment_maximum_percent         = var.deployment_maximum_percent
 
   dynamic "network_configuration" {
     for_each = var.network_mode == "awsvpc" ? [1] : []

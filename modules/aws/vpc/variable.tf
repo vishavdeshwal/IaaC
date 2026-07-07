@@ -1,24 +1,24 @@
 variable "vpc_cidr" {
-    type = string
+  type = string
 }
 
 variable "environment" {
-    type = string
+  type = string
 }
 
 variable "project" {
-    type = string
+  type = string
 }
 
 variable "instance_tenancy" {
-    type = string
+  type = string
 }
 
 variable "enable_dns_hostnames" {
-    type = string
+  type = string
 }
 
 variable "enable_dns_support" {
-    type = string
+  type = string
 }
 

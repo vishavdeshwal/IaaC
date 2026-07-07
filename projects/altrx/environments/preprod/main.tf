@@ -1,84 +1,84 @@
 terraform {
-    required_version = ">= 1.5.0"
-    required_providers {
-      aws = {
-        source  = "hashicorp/aws"
-        version = "~> 5.0"
-      }
+  required_version = ">= 1.5.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
-    backend "s3" {
-        bucket       = "altrx-terraform-state-993197"
-        key          = "altrx/preprod/terraform.tfstate"
-        region       = "us-east-1"
-        profile      = "altrx"
-        use_lockfile = true
-        encrypt      = true
-    }
+  }
+  backend "s3" {
+    bucket       = "altrx-terraform-state-993197"
+    key          = "altrx/preprod/terraform.tfstate"
+    region       = "us-east-1"
+    profile      = "altrx"
+    use_lockfile = true
+    encrypt      = true
+  }
 }
 
 provider "aws" {
-    region  = var.aws_region
-    profile = var.aws_profile 
+  region  = var.aws_region
+  profile = var.aws_profile
 }
 
 # =============================================================
 # Network Modules (VPC, Subnets, Internet Gateway)
 # =============================================================
 module "vpc" {
-    source               = "../../../../modules/aws/vpc"
-    vpc_cidr             = var.vpc_cidr
-    instance_tenancy     = var.instance_tenancy
-    enable_dns_hostnames = var.enable_dns_hostnames
-    enable_dns_support   = var.enable_dns_support
-    environment          = var.environment
-    project              = var.project
+  source               = "../../../../modules/aws/vpc"
+  vpc_cidr             = var.vpc_cidr
+  instance_tenancy     = var.instance_tenancy
+  enable_dns_hostnames = var.enable_dns_hostnames
+  enable_dns_support   = var.enable_dns_support
+  environment          = var.environment
+  project              = var.project
 }
 
 module "subnets" {
-    source          = "../../../../modules/aws/subnets"
-    vpc_id          = module.vpc.vpc_id
-    public_subnets  = var.public_subnets
-    private_subnets = var.private_subnets
-    environment     = var.environment
-    project         = var.project
+  source          = "../../../../modules/aws/subnets"
+  vpc_id          = module.vpc.vpc_id
+  public_subnets  = var.public_subnets
+  private_subnets = var.private_subnets
+  environment     = var.environment
+  project         = var.project
 }
 module "igw" {
-    source      = "../../../../modules/aws/igw"
-    vpc_id      = module.vpc.vpc_id
-    environment = var.environment
-    project     = var.project
+  source      = "../../../../modules/aws/igw"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 }
 
 module "eip" {
-    source      = "../../../../modules/aws/eip"
-    environment = var.environment
-    project     = var.project
+  source      = "../../../../modules/aws/eip"
+  environment = var.environment
+  project     = var.project
 }
 
 module "nat_gateway" {
-    source            = "../../../../modules/aws/nat_gateway"
-    eip_allocation_id = module.eip.eip_allocation_id
-    public_subnet_id  = module.subnets.public_subnet_ids["public1"]
-    environment       = var.environment
-    project           = var.project
-    igw_dependency    = module.igw.igw_id
+  source            = "../../../../modules/aws/nat_gateway"
+  eip_allocation_id = module.eip.eip_allocation_id
+  public_subnet_id  = module.subnets.public_subnet_ids["public1"]
+  environment       = var.environment
+  project           = var.project
+  igw_dependency    = module.igw.igw_id
 }
 
 module "route_tables" {
-    source         = "../../../../modules/aws/route_tables"
-    vpc_id         = module.vpc.vpc_id
-    igw_id         = module.igw.igw_id
-    nat_gateway_id = module.nat_gateway.nat_gateway_id
-    environment    = var.environment
-    project        = var.project
+  source         = "../../../../modules/aws/route_tables"
+  vpc_id         = module.vpc.vpc_id
+  igw_id         = module.igw.igw_id
+  nat_gateway_id = module.nat_gateway.nat_gateway_id
+  environment    = var.environment
+  project        = var.project
 }
 
 module "route_table_association" {
-    source                  = "../../../../modules/aws/route_table_association"
-    public_subnet_ids       = module.subnets.public_subnet_ids
-    private_subnet_ids      = module.subnets.private_subnet_ids
-    public_route_table_id   = module.route_tables.public_route_table_id
-    private_route_table_id  = module.route_tables.private_route_table_id
+  source                 = "../../../../modules/aws/route_table_association"
+  public_subnet_ids      = module.subnets.public_subnet_ids
+  private_subnet_ids     = module.subnets.private_subnet_ids
+  public_route_table_id  = module.route_tables.public_route_table_id
+  private_route_table_id = module.route_tables.private_route_table_id
 }
 
 # =============================================================
@@ -237,22 +237,22 @@ module "preprod_wordpress_sg" {
 # Consolidated Databases (DynamoDB & Redis)
 # =============================================================
 module "preprod_redis" {
-  source                     = "../../../../modules/aws/elasticache"
-  name                       = "redis"
-  engine                     = "redis"
-  node_type                  = "cache.t3.small"
-  num_cache_clusters         = 1
-  transit_encryption         = true
-  at_rest_encryption         = true
-  auth_token                 = null
-  maintenance_window         = "thu:04:00-thu:05:00"
-  snapshot_retention_limit   = 1
-  snapshot_window            = "06:30-07:30"
-  subnet_ids                 = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
-  security_group_ids         = [module.preprod_redis_sg.security_group_id]
-  environment                = var.environment
-  project                    = var.project
-  apply_immediately          = true
+  source                   = "../../../../modules/aws/elasticache"
+  name                     = "redis"
+  engine                   = "redis"
+  node_type                = "cache.t3.small"
+  num_cache_clusters       = 1
+  transit_encryption       = true
+  at_rest_encryption       = true
+  auth_token               = null
+  maintenance_window       = "thu:04:00-thu:05:00"
+  snapshot_retention_limit = 1
+  snapshot_window          = "06:30-07:30"
+  subnet_ids               = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
+  security_group_ids       = [module.preprod_redis_sg.security_group_id]
+  environment              = var.environment
+  project                  = var.project
+  apply_immediately        = true
 }
 
 module "dynamodb_payment_events_log" {
@@ -351,44 +351,44 @@ module "dynamodb_weight_logs" {
 # Consolidated Load Balancing (ALB, Listeners, Target Groups)
 # =============================================================
 module "preprod_target_group" {
-  source               = "../../../../modules/aws/target_group"
-  name                 = "backend"
-  port                 = 8000
-  protocol             = "HTTP"
-  target_type          = "ip"
-  vpc_id               = module.vpc.vpc_id
-  deregistration_delay = 300
-  health_check_path    = "/healthz"
+  source                = "../../../../modules/aws/target_group"
+  name                  = "backend"
+  port                  = 8000
+  protocol              = "HTTP"
+  target_type           = "ip"
+  vpc_id                = module.vpc.vpc_id
+  deregistration_delay  = 300
+  health_check_path     = "/healthz"
   health_check_protocol = "HTTP"
-  health_check_port    = "traffic-port"
+  health_check_port     = "traffic-port"
   health_check_interval = 15
-  health_check_timeout = 5
-  healthy_threshold   = 2
-  unhealthy_threshold = 3
-  health_check_matcher = "200"
-  environment          = var.environment
-  project              = var.project
-  name_override        = "${title(var.environment)}-Backend"
+  health_check_timeout  = 5
+  healthy_threshold     = 2
+  unhealthy_threshold   = 3
+  health_check_matcher  = "200"
+  environment           = var.environment
+  project               = var.project
+  name_override         = "${title(var.environment)}-Backend"
 }
 
 module "preprod_alb" {
-  source               = "../../../../modules/aws/alb"
-  name                 = "alb"
-  internal             = false
-  security_group_ids   = [module.preprod_alb_sg.security_group_id]
-  subnet_ids           = [module.subnets.public_subnet_ids["public1"], module.subnets.public_subnet_ids["public2"]]
+  source                     = "../../../../modules/aws/alb"
+  name                       = "alb"
+  internal                   = false
+  security_group_ids         = [module.preprod_alb_sg.security_group_id]
+  subnet_ids                 = [module.subnets.public_subnet_ids["public1"], module.subnets.public_subnet_ids["public2"]]
   enable_deletion_protection = false
-  idle_timeout         = 60
-  enable_http2         = true
-  http_port            = 80
-  http_default_action  = "redirect_to_https"
-  https_port           = 443
-  certificate_arn      = "arn:aws:acm:us-east-1:692137657276:certificate/33647a6f-f1c6-4ae8-aa6e-a58602892404"
-  https_target_group_arn = module.preprod_target_group.target_group_arn
-  ssl_policy           = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
-  environment          = var.environment
-  project              = var.project
-  name_override        = "${title(var.environment)}-ALB"
+  idle_timeout               = 60
+  enable_http2               = true
+  http_port                  = 80
+  http_default_action        = "redirect_to_https"
+  https_port                 = 443
+  certificate_arn            = "arn:aws:acm:us-east-1:692137657276:certificate/33647a6f-f1c6-4ae8-aa6e-a58602892404"
+  https_target_group_arn     = module.preprod_target_group.target_group_arn
+  ssl_policy                 = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+  environment                = var.environment
+  project                    = var.project
+  name_override              = "${title(var.environment)}-ALB"
 }
 
 # =============================================================
@@ -401,10 +401,10 @@ module "preprod_payment_events_dlq" {
   project                    = var.project
   name_override              = "${var.environment}_${lower(var.project)}-payment-events-dlq"
   visibility_timeout_seconds = 30
-  message_retention_seconds   = 1209600
-  max_message_size            = 262144
-  delay_seconds               = 0
-  receive_wait_time_seconds   = 0
+  message_retention_seconds  = 1209600
+  max_message_size           = 262144
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 0
 }
 
 module "preprod_payment_events" {
@@ -414,13 +414,13 @@ module "preprod_payment_events" {
   project                    = var.project
   name_override              = "${var.environment}_${lower(var.project)}-payment-events"
   visibility_timeout_seconds = 30
-  message_retention_seconds   = 345600
-  max_message_size            = 262144
-  delay_seconds               = 0
-  receive_wait_time_seconds   = 0
+  message_retention_seconds  = 345600
+  max_message_size           = 262144
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 0
   dlq_arn                    = module.preprod_payment_events_dlq.queue_arn
   max_receive_count          = 5
-  policy                     = jsonencode({
+  policy = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -442,11 +442,11 @@ module "reconciler_trigger_dlq" {
   project                    = var.project
   name_override              = "${lower(var.project)}-reconciler-trigger-dlq-${var.environment}"
   visibility_timeout_seconds = 30
-  message_retention_seconds   = 1209600
-  max_message_size            = 262144
-  delay_seconds               = 0
-  receive_wait_time_seconds   = 0
-  policy                     = jsonencode({
+  message_retention_seconds  = 1209600
+  max_message_size           = 262144
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 0
+  policy = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -468,13 +468,13 @@ module "reconciler_trigger" {
   project                    = var.project
   name_override              = "${lower(var.project)}-reconciler-trigger-${var.environment}"
   visibility_timeout_seconds = 660
-  message_retention_seconds   = 345600
-  max_message_size            = 262144
-  delay_seconds               = 0
-  receive_wait_time_seconds   = 0
+  message_retention_seconds  = 345600
+  max_message_size           = 262144
+  delay_seconds              = 0
+  receive_wait_time_seconds  = 0
   dlq_arn                    = module.reconciler_trigger_dlq.queue_arn
   max_receive_count          = 5
-  policy                     = jsonencode({
+  policy = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
       Action = "SQS:*"
@@ -562,12 +562,12 @@ module "preprod_worker_payment_log_group" {
 # Consolidated IAM Roles & Policies (Fully Isolated Suffixes)
 # =============================================================
 resource "aws_iam_policy" "ecs_s3_env_policy" {
-  name        = "${var.environment}-ecs-s3-env-policy"
-  path        = "/"
+  name = "${var.environment}-ecs-s3-env-policy"
+  path = "/"
   policy = jsonencode({
     Statement = [{
-      Action   = ["s3:GetObject"]
-      Effect   = "Allow"
+      Action = ["s3:GetObject"]
+      Effect = "Allow"
       Resource = [
         "arn:aws:s3:::${var.environment}-${lower(var.project)}-v3-uploads/worker-env/worker.env",
         "arn:aws:s3:::${var.environment}-${lower(var.project)}-v3-uploads/backend-env/backend.env"
@@ -582,10 +582,10 @@ resource "aws_iam_policy" "ecs_s3_env_policy" {
 }
 
 module "iam_ecs_task_execution_role" {
-  source             = "../../../../modules/aws/iam_role"
-  name               = "ECS-Task-execution-role-${var.environment}"
-  environment        = var.environment
-  project            = var.project
+  source      = "../../../../modules/aws/iam_role"
+  name        = "ECS-Task-execution-role-${var.environment}"
+  environment = var.environment
+  project     = var.project
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRole"
@@ -615,11 +615,11 @@ resource "aws_iam_role_policy_attachment" "ecs_s3_env_attachment" {
 }
 
 resource "aws_iam_policy" "ecs_dynamodb_sqs_policy" {
-  name        = "${var.environment}-ecs-dynamodb-sqs-policy"
-  path        = "/"
+  name = "${var.environment}-ecs-dynamodb-sqs-policy"
+  path = "/"
   policy = jsonencode({
     Statement = [{
-      Action   = [
+      Action = [
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
@@ -630,14 +630,14 @@ resource "aws_iam_policy" "ecs_dynamodb_sqs_policy" {
         "dynamodb:BatchGetItem",
         "dynamodb:BatchWriteItem"
       ]
-      Effect   = "Allow"
+      Effect = "Allow"
       Resource = [
         "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-*",
         "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-*/index/*"
       ]
-      Sid      = "DynamoDBAccess"
+      Sid = "DynamoDBAccess"
       }, {
-      Action   = [
+      Action = [
         "sqs:SendMessage",
         "sqs:ReceiveMessage",
         "sqs:DeleteMessage",
@@ -645,13 +645,13 @@ resource "aws_iam_policy" "ecs_dynamodb_sqs_policy" {
         "sqs:GetQueueUrl",
         "sqs:ChangeMessageVisibility"
       ]
-      Effect   = "Allow"
+      Effect = "Allow"
       Resource = [
         "arn:aws:sqs:us-east-1:692137657276:${var.environment}_${lower(var.project)}-*",
         "arn:aws:sqs:us-east-1:692137657276:altrx-reconciler-trigger-${var.environment}",
         "arn:aws:sqs:us-east-1:692137657276:altrx-reconciler-trigger-dlq-${var.environment}"
       ]
-      Sid      = "SQSAccess"
+      Sid = "SQSAccess"
     }]
     Version = "2012-10-17"
   })
@@ -664,10 +664,10 @@ resource "aws_iam_role_policy_attachment" "ecs_dynamodb_sqs_attachment" {
 
 
 module "iam_altrx_ssm_role" {
-  source             = "../../../../modules/aws/iam_role"
-  name               = "altrx_ssm_role_${var.environment}"
-  environment        = var.environment
-  project            = var.project
+  source      = "../../../../modules/aws/iam_role"
+  name        = "altrx_ssm_role_${var.environment}"
+  environment = var.environment
+  project     = var.project
   assume_role_policy = jsonencode({
     Statement = [{
       Action = "sts:AssumeRole"
@@ -684,12 +684,12 @@ module "iam_altrx_ssm_role" {
 }
 
 resource "aws_iam_policy" "altrx_reconciler_policy" {
-  name        = "AltrxReconcilerPolicy-${var.environment}"
-  path        = "/"
+  name = "AltrxReconcilerPolicy-${var.environment}"
+  path = "/"
   policy = jsonencode({
     Statement = [{
-      Action   = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:DescribeTable"]
-      Effect   = "Allow"
+      Action = ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan", "dynamodb:DescribeTable"]
+      Effect = "Allow"
       Resource = [
         "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-checkout-submissions",
         "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-checkout-submissions/index/*",
@@ -701,7 +701,7 @@ resource "aws_iam_policy" "altrx_reconciler_policy" {
         "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-weight-logs",
         "arn:aws:dynamodb:us-east-1:692137657276:table/${var.environment}_${lower(var.project)}-weight-logs/index/*"
       ]
-      Sid      = "DynamoDBAccess"
+      Sid = "DynamoDBAccess"
       }, {
       Action   = ["sqs:SendMessage"]
       Effect   = "Allow"
@@ -750,10 +750,10 @@ module "ecs_backend_service" {
   platform_version                  = "1.4.0"
   launch_type                       = var.ecs_launch_type
   health_check_grace_period_seconds = 180
-  
-  subnet_ids          = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
-  security_group_ids  = [module.preprod_be_sg.security_group_id]
-  assign_public_ip    = false
+
+  subnet_ids         = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
+  security_group_ids = [module.preprod_be_sg.security_group_id]
+  assign_public_ip   = false
 
   depends_on = [
     aws_iam_role_policy_attachment.ecs_s3_env_attachment,
@@ -802,17 +802,17 @@ module "ecs_backend_service" {
 }
 
 module "lambda_reconciler" {
-  source                     = "../../../../modules/aws/lambda"
-  function_name              = "reconciler"
-  environment                = var.environment
-  project                    = var.project
-  image_uri                  = "692137657276.dkr.ecr.us-east-1.amazonaws.com/altrx-reconciler:v-26-05-1527"
-  memory_size                = 512
-  timeout                    = 600
-  environment_variables      = var.reconciler_env_vars
-  additional_policy_arns     = [aws_iam_policy.altrx_reconciler_policy.arn]
-  ecr_repository_name        = module.ecr_reconciler.repository_name
-  ecr_repository_arn         = module.ecr_reconciler.repository_arn
+  source                 = "../../../../modules/aws/lambda"
+  function_name          = "reconciler"
+  environment            = var.environment
+  project                = var.project
+  image_uri              = "692137657276.dkr.ecr.us-east-1.amazonaws.com/altrx-reconciler:v-26-05-1527"
+  memory_size            = 512
+  timeout                = 600
+  environment_variables  = var.reconciler_env_vars
+  additional_policy_arns = [aws_iam_policy.altrx_reconciler_policy.arn]
+  ecr_repository_name    = module.ecr_reconciler.repository_name
+  ecr_repository_arn     = module.ecr_reconciler.repository_arn
 }
 
 module "ecr_reconciler" {
@@ -836,10 +836,10 @@ module "ecs_worker_service" {
   desired_count      = 1
   platform_version   = "LATEST"
   launch_type        = var.ecs_launch_type
-  
-  subnet_ids          = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
-  security_group_ids  = [module.preprod_worker_sg.security_group_id]
-  assign_public_ip    = true
+
+  subnet_ids         = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
+  security_group_ids = [module.preprod_worker_sg.security_group_id]
+  assign_public_ip   = true
 
   depends_on = [
     aws_iam_role_policy_attachment.ecs_s3_env_attachment,
@@ -948,20 +948,20 @@ module "cv_case_events_dlq" {
 }
 
 module "cv_case_events" {
-  source                     = "../../../../modules/aws/sqs"
-  name                       = "cv-case-events"
-  environment                = var.environment
-  project                    = var.project
-  name_override              = var.environment == "prod" ? "cv-case-events.fifo" : "cv-case-events-${var.environment}.fifo"
-  fifo_queue                 = true
+  source                      = "../../../../modules/aws/sqs"
+  name                        = "cv-case-events"
+  environment                 = var.environment
+  project                     = var.project
+  name_override               = var.environment == "prod" ? "cv-case-events.fifo" : "cv-case-events-${var.environment}.fifo"
+  fifo_queue                  = true
   content_based_deduplication = false
-  visibility_timeout_seconds = 60
-  message_retention_seconds  = 345600
-  max_message_size           = 262144
-  delay_seconds              = 0
-  receive_wait_time_seconds  = 0
-  dlq_arn                    = module.cv_case_events_dlq.queue_arn
-  max_receive_count          = 5
+  visibility_timeout_seconds  = 60
+  message_retention_seconds   = 345600
+  max_message_size            = 262144
+  delay_seconds               = 0
+  receive_wait_time_seconds   = 0
+  dlq_arn                     = module.cv_case_events_dlq.queue_arn
+  max_receive_count           = 5
   policy = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
@@ -1006,7 +1006,7 @@ module "ecr_preprod_cv_case_events" {
 
 data "aws_iam_policy_document" "api_cv_case_events_policy_doc" {
   statement {
-    actions   = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+    actions = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
     resources = [
       module.cv_case_events.queue_arn,
       module.cv_case_events_dlq.queue_arn
@@ -1017,7 +1017,7 @@ data "aws_iam_policy_document" "api_cv_case_events_policy_doc" {
     resources = [module.dynamodb_processed_events.table_arn]
   }
   statement {
-    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    actions = ["logs:CreateLogStream", "logs:PutLogEvents"]
     resources = [
       "${module.preprod_cv_case_events_log_group.log_group_arn}:*"
     ]
@@ -1035,17 +1035,17 @@ module "iam_api_cv_case_events_policy" {
 }
 
 module "ecs_cv_case_events_service" {
-  source                       = "../../../../modules/aws/ecs_service"
-  service_name                 = "Preprod-CvCaseEvents"
-  family                       = "preprod-cv-case-events"
-  cluster_arn                  = module.ecs_cluster.cluster_arn
-  cpu                          = "256"
-  memory                       = "512"
-  execution_role_arn           = module.iam_ecs_task_execution_role.role_arn
-  task_role_arn                = module.iam_ecs_task_execution_role.role_arn
-  desired_count                = 1
-  platform_version             = "LATEST"
-  launch_type                  = var.ecs_launch_type
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "Preprod-CvCaseEvents"
+  family             = "preprod-cv-case-events"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  cpu                = "256"
+  memory             = "512"
+  execution_role_arn = module.iam_ecs_task_execution_role.role_arn
+  task_role_arn      = module.iam_ecs_task_execution_role.role_arn
+  desired_count      = 1
+  platform_version   = "LATEST"
+  launch_type        = var.ecs_launch_type
 
   subnet_ids         = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
   security_group_ids = [module.preprod_worker_sg.security_group_id]

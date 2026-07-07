@@ -1,44 +1,44 @@
 output "cluster_id" {
-    value       = aws_ecs_cluster.fargate.id
-    description = "ID of the ECS cluster"
+  value       = aws_ecs_cluster.fargate.id
+  description = "ID of the ECS cluster"
 }
 
 output "cluster_arn" {
-    value       = aws_ecs_cluster.fargate.arn
-    description = "ARN of the ECS cluster"
+  value       = aws_ecs_cluster.fargate.arn
+  description = "ARN of the ECS cluster"
 }
 
 output "cluster_name" {
-    value       = aws_ecs_cluster.fargate.name
-    description = "Name of the ECS cluster"
+  value       = aws_ecs_cluster.fargate.name
+  description = "Name of the ECS cluster"
 }
 
 output "service_id" {
-    value       = aws_ecs_service.fargate.id
-    description = "ID of the ECS service"
+  value       = aws_ecs_service.fargate.id
+  description = "ID of the ECS service"
 }
 
 output "service_name" {
-    value       = aws_ecs_service.fargate.name
-    description = "Name of the ECS service"
+  value       = aws_ecs_service.fargate.name
+  description = "Name of the ECS service"
 }
 
 output "task_definition_arn" {
-    value       = aws_ecs_task_definition.fargate.arn
-    description = "ARN of the ECS task definition"
+  value       = aws_ecs_task_definition.fargate.arn
+  description = "ARN of the ECS task definition"
 }
 
 output "task_definition_family" {
-    value       = aws_ecs_task_definition.fargate.family
-    description = "Family of the ECS task definition"
+  value       = aws_ecs_task_definition.fargate.family
+  description = "Family of the ECS task definition"
 }
 
 output "execution_role_arn" {
-    value       = aws_iam_role.execution.arn
-    description = "ARN of the task execution IAM role"
+  value       = aws_iam_role.execution.arn
+  description = "ARN of the task execution IAM role"
 }
 
 output "task_role_arn" {
-    value       = aws_iam_role.task.arn
-    description = "ARN of the task IAM role"
+  value       = aws_iam_role.task.arn
+  description = "ARN of the task IAM role"
 }

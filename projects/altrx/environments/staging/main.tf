@@ -595,20 +595,20 @@ module "cv_case_events_dlq" {
 }
 
 module "cv_case_events" {
-  source                     = "../../../../modules/aws/sqs"
-  name                       = "cv-case-events"
-  environment                = var.environment
-  project                    = var.project
-  name_override              = var.environment == "prod" ? "cv-case-events.fifo" : "cv-case-events-${var.environment}.fifo"
-  fifo_queue                 = true
+  source                      = "../../../../modules/aws/sqs"
+  name                        = "cv-case-events"
+  environment                 = var.environment
+  project                     = var.project
+  name_override               = var.environment == "prod" ? "cv-case-events.fifo" : "cv-case-events-${var.environment}.fifo"
+  fifo_queue                  = true
   content_based_deduplication = false
-  visibility_timeout_seconds = 60
-  message_retention_seconds  = 345600
-  max_message_size           = 262144
-  delay_seconds              = 0
-  receive_wait_time_seconds  = 0
-  dlq_arn                    = module.cv_case_events_dlq.queue_arn
-  max_receive_count          = 5
+  visibility_timeout_seconds  = 60
+  message_retention_seconds   = 345600
+  max_message_size            = 262144
+  delay_seconds               = 0
+  receive_wait_time_seconds   = 0
+  dlq_arn                     = module.cv_case_events_dlq.queue_arn
+  max_receive_count           = 5
   policy = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
@@ -933,7 +933,7 @@ data "aws_iam_policy_document" "worker_task_policy_doc" {
     resources = ["arn:aws:secretsmanager:us-east-1:692137657276:secret:staging_altrx/v3/*"]
   }
   statement {
-    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    actions = ["logs:CreateLogStream", "logs:PutLogEvents"]
     resources = [
       "arn:aws:logs:us-east-1:692137657276:log-group:/aws/ecs/staging_altrx-payment-worker:*",
       "${module.staging_cv_case_events_log_group.log_group_arn}:*"
@@ -1139,7 +1139,7 @@ module "ecs_cv_case_events_service" {
   launch_type                  = var.ecs_launch_type
   task_definition_arn_override = data.aws_ecs_task_definition.staging_cv_case_events.arn
 
-  subnet_ids         = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
+  subnet_ids = [module.subnets.private_subnet_ids["private1"], module.subnets.private_subnet_ids["private2"]]
 
   security_group_ids = [module.staging_worker_sg.security_group_id]
   assign_public_ip   = true
@@ -1478,13 +1478,13 @@ resource "aws_s3_bucket_policy" "strapie_uploads_public_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowCloudFrontServicePrincipalReadOnly"
-        Effect    = "Allow"
+        Sid    = "AllowCloudFrontServicePrincipalReadOnly"
+        Effect = "Allow"
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }
-        Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.strapie_uploads.arn}/*"
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.strapie_uploads.arn}/*"
         Condition = {
           StringEquals = {
             "AWS:SourceArn" = module.cloudfront_strapie.cloudfront_distribution_arn
@@ -1690,16 +1690,16 @@ data "aws_iam_user" "tester" {
 }
 
 module "iam_cv_case_events_user_policy" {
-  source      = "../../../../modules/aws/iam_policy"
-  name        = "cv-case-events-sqs"
-  user_name   = data.aws_iam_user.tester.user_name
-  is_inline   = true
-  policy      = jsonencode({
+  source    = "../../../../modules/aws/iam_policy"
+  name      = "cv-case-events-sqs"
+  user_name = data.aws_iam_user.tester.user_name
+  is_inline = true
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "CvCaseEventsSQS"
-        Effect   = "Allow"
+        Sid    = "CvCaseEventsSQS"
+        Effect = "Allow"
         Action = [
           "sqs:SendMessage",
           "sqs:ReceiveMessage",
@@ -1717,17 +1717,17 @@ module "iam_cv_case_events_user_policy" {
 }
 
 module "iam_altrx_local_testing_policy" {
-  source      = "../../../../modules/aws/iam_policy"
-  name        = "altrx_local_testing"
-  user_name   = data.aws_iam_user.tester.user_name
-  is_inline   = false
-  policy      = jsonencode({
+  source    = "../../../../modules/aws/iam_policy"
+  name      = "altrx_local_testing"
+  user_name = data.aws_iam_user.tester.user_name
+  is_inline = false
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid      = "StagingDynamoDBAccess"
-        Effect   = "Allow"
-        Action   = ["dynamodb:DescribeTable", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan"]
+        Sid    = "StagingDynamoDBAccess"
+        Effect = "Allow"
+        Action = ["dynamodb:DescribeTable", "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query", "dynamodb:Scan"]
         Resource = [
           "arn:aws:dynamodb:us-east-1:692137657276:table/staging_altrx-*",
           "arn:aws:dynamodb:us-east-1:692137657276:table/staging_altrx-*/index/*"
@@ -1740,9 +1740,9 @@ module "iam_altrx_local_testing_policy" {
         Resource = ["arn:aws:sqs:us-east-1:692137657276:staging_altrx-payment-events"]
       },
       {
-        Sid      = "StagingS3Access"
-        Effect   = "Allow"
-        Action   = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"]
+        Sid    = "StagingS3Access"
+        Effect = "Allow"
+        Action = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"]
         Resource = [
           "arn:aws:s3:::staging-altrx-v3-uploads",
           "arn:aws:s3:::staging-altrx-v3-uploads/*"

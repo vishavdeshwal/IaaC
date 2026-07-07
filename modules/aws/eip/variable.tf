@@ -1,22 +1,22 @@
 variable "environment" {
-    type = string
+  type = string
 }
 
 variable "project" {
-    type = string
+  type = string
 }
 
 variable "name" {
-    type    = string
-    default = "nat-eip"
+  type    = string
+  default = "nat-eip"
 }
 
 variable "name_override" {
-    type    = string
-    default = null
+  type    = string
+  default = null
 }
 
 variable "instance_id" {
-    type    = string
-    default = null
+  type    = string
+  default = null
 }

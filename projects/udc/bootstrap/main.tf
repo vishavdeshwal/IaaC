@@ -69,11 +69,11 @@ resource "aws_s3_bucket_public_access_block" "state_public_block" {
 
 #Object ownership
 resource "aws_s3_bucket_ownership_controls" "state_ownership" {
-    bucket = aws_s3_bucket.state.id
+  bucket = aws_s3_bucket.state.id
 
-    rule {
-        object_ownership = "BucketOwnerPreferred"
-    }
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
 }
 
 

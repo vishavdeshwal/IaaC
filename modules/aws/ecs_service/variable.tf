@@ -53,8 +53,8 @@ variable "platform_version" {
 }
 
 variable "availability_zone_rebalancing" {
-  type        = string
-  default     = "ENABLED"
+  type    = string
+  default = "ENABLED"
 }
 
 variable "enable_ecs_managed_tags" {
@@ -146,4 +146,16 @@ variable "network_mode" {
   type        = string
   default     = "awsvpc"
   description = "The network mode for the task definition (e.g. awsvpc, bridge, host)"
+}
+
+variable "deployment_minimum_healthy_percent" {
+  type        = number
+  default     = 100
+  description = "Lower limit on the number of running tasks during a deployment"
+}
+
+variable "deployment_maximum_percent" {
+  type        = number
+  default     = 200
+  description = "Upper limit on the number of running tasks during a deployment"
 }

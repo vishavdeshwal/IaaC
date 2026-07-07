@@ -1,300 +1,300 @@
 terraform {
-    required_version = ">= 1.5.0"
-    required_providers {
-      aws = {
-        source  = "hashicorp/aws"
-        version = "~> 5.0"
-      }
+  required_version = ">= 1.5.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
-    backend "s3" {
-        bucket       = "sammmm-terraform-state-847659"
-        key          = "sam/preprod/terraform.tfstate" # Isolated state for preprod!
-        region       = "ap-south-1"
-        profile      = "sam"
-        use_lockfile = true
-        encrypt      = true
-    }
+  }
+  backend "s3" {
+    bucket       = "sammmm-terraform-state-847659"
+    key          = "sam/preprod/terraform.tfstate" # Isolated state for preprod!
+    region       = "ap-south-1"
+    profile      = "sam"
+    use_lockfile = true
+    encrypt      = true
+  }
 }
 
 provider "aws" {
-    region  = var.aws_region
-    profile = var.aws_profile 
+  region  = var.aws_region
+  profile = var.aws_profile
 }
 
 module "vpc" {
-    source = "../../../../modules/aws/vpc"
-    vpc_cidr = var.vpc_cidr
-    instance_tenancy = var.instance_tenancy
-    enable_dns_hostnames = var.enable_dns_hostnames
-    enable_dns_support = var.enable_dns_support
-    environment = var.environment
-    project = var.project
+  source               = "../../../../modules/aws/vpc"
+  vpc_cidr             = var.vpc_cidr
+  instance_tenancy     = var.instance_tenancy
+  enable_dns_hostnames = var.enable_dns_hostnames
+  enable_dns_support   = var.enable_dns_support
+  environment          = var.environment
+  project              = var.project
 }
 
 module "subnets" {
-    source = "../../../../modules/aws/subnets"
-    vpc_id = module.vpc.vpc_id
-    public_subnets = var.public_subnets
-    private_subnets = var.private_subnets
-    environment = var.environment
-    project = var.project
+  source          = "../../../../modules/aws/subnets"
+  vpc_id          = module.vpc.vpc_id
+  public_subnets  = var.public_subnets
+  private_subnets = var.private_subnets
+  environment     = var.environment
+  project         = var.project
 }
 
 module "igw" {
-    source = "../../../../modules/aws/igw"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/igw"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 }
 
 module "eip" {
-    source = "../../../../modules/aws/eip"
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/eip"
+  environment = var.environment
+  project     = var.project
 }
 
 module "nat_gateway" {
-    source = "../../../../modules/aws/nat_gateway"
-    eip_allocation_id = module.eip.eip_allocation_id
-    public_subnet_id = module.subnets.public_subnet_ids["public-1"]
-    igw_dependency = module.igw.igw_id
-    environment = var.environment
-    project = var.project
+  source            = "../../../../modules/aws/nat_gateway"
+  eip_allocation_id = module.eip.eip_allocation_id
+  public_subnet_id  = module.subnets.public_subnet_ids["public-1"]
+  igw_dependency    = module.igw.igw_id
+  environment       = var.environment
+  project           = var.project
 }
 
 module "route_tables" {
-    source = "../../../../modules/aws/route_tables"
-    vpc_id = module.vpc.vpc_id
-    igw_id = module.igw.igw_id
-    nat_gateway_id = module.nat_gateway.nat_gateway_id
-    environment = var.environment
-    project = var.project
+  source         = "../../../../modules/aws/route_tables"
+  vpc_id         = module.vpc.vpc_id
+  igw_id         = module.igw.igw_id
+  nat_gateway_id = module.nat_gateway.nat_gateway_id
+  environment    = var.environment
+  project        = var.project
 }
 
 module "route_table_association" {
-    source = "../../../../modules/aws/route_table_association"
-    public_subnet_ids = module.subnets.public_subnet_ids
-    private_subnet_ids = module.subnets.private_subnet_ids
-    public_route_table_id = module.route_tables.public_route_table_id
-    private_route_table_id = module.route_tables.private_route_table_id
+  source                 = "../../../../modules/aws/route_table_association"
+  public_subnet_ids      = module.subnets.public_subnet_ids
+  private_subnet_ids     = module.subnets.private_subnet_ids
+  public_route_table_id  = module.route_tables.public_route_table_id
+  private_route_table_id = module.route_tables.private_route_table_id
 }
 
 
 
 // --------- Security Groups ------------------
 module "alb_sg" {
-    source = "../../../../modules/aws/security_groups"
-    name = "abl"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/security_groups"
+  name        = "abl"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 
-    ingress_rules = [
-        {
-            from_port = 80
-            to_port = 80
-            protocol = "tcp"
-            description = "Allow HTTP traffic"
+  ingress_rules = [
+    {
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      description = "Allow HTTP traffic"
 
-            cidr_blocks = ["0.0.0.0/0"]
-        },
-        {
-            from_port = 443
-            to_port = 443
-            protocol = "tcp"
-            description = "Allow HTTPS traffic"
-            cidr_blocks = ["0.0.0.0/0"]
-        }
-    ]
+      cidr_blocks = ["0.0.0.0/0"]
+    },
+    {
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      description = "Allow HTTPS traffic"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 
-    egress_rules = [
-        {
-            from_port = 0
-            to_port = 0
-            protocol = "-1"
-            description = ""
-            cidr_blocks = ["0.0.0.0/0"]
-        }
-    ]
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      description = ""
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 }
 
 module "app_sg" {
-    source = "../../../../modules/aws/security_groups"
+  source = "../../../../modules/aws/security_groups"
 
-    name = "app"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  name        = "app"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 
-    ingress_rules = [
-        {
-            from_port = 8080
-            to_port = 8080
-            protocol = "tcp"
-            description = "Allow traffic from ALB"
+  ingress_rules = [
+    {
+      from_port   = 8080
+      to_port     = 8080
+      protocol    = "tcp"
+      description = "Allow traffic from ALB"
 
-            cidr_blocks = []
-            security_groups = [
-                module.alb_sg.security_group_id
-            ]
-        }
-    ]
+      cidr_blocks = []
+      security_groups = [
+        module.alb_sg.security_group_id
+      ]
+    }
+  ]
 
 
 
-    egress_rules = [
-        {
-            from_port = 0
-            to_port = 0
-            protocol = "-1"
-            description = ""
-            cidr_blocks = ["0.0.0.0/0"]
-            security_groups = []
-        }
-    ]
+  egress_rules = [
+    {
+      from_port       = 0
+      to_port         = 0
+      protocol        = "-1"
+      description     = ""
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+    }
+  ]
 }
 
 module "redis-sg" {
-    source = "../../../../modules/aws/security_groups"
-    name = "redis"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/security_groups"
+  name        = "redis"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 
-    ingress_rules = [
-        {
-            from_port = 6379
-            to_port = 6379
-            protocol = "tcp"
-            description = "Allow traffic from Application"
+  ingress_rules = [
+    {
+      from_port   = 6379
+      to_port     = 6379
+      protocol    = "tcp"
+      description = "Allow traffic from Application"
 
-            cidr_blocks = []
-            security_groups = [
-                module.app_sg.security_group_id
-            ]
-        }
-    ]
+      cidr_blocks = []
+      security_groups = [
+        module.app_sg.security_group_id
+      ]
+    }
+  ]
 
-    egress_rules = [
-        {
-            from_port = 0
-            to_port = 0
-            protocol = "-1"
-            description = ""
-            cidr_blocks = ["0.0.0.0/0"]
-            security_groups = []
-        }
-    ]
+  egress_rules = [
+    {
+      from_port       = 0
+      to_port         = 0
+      protocol        = "-1"
+      description     = ""
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+    }
+  ]
 }
 
 module "db-sg" {
-    source = "../../../../modules/aws/security_groups"
+  source = "../../../../modules/aws/security_groups"
 
-    name = "aurora"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  name        = "aurora"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 
-    ingress_rules = [
-        {
-            from_port = 5432
-            to_port = 5432
-            protocol = "tcp"
-            description = "Allow traffic from Application"
+  ingress_rules = [
+    {
+      from_port   = 5432
+      to_port     = 5432
+      protocol    = "tcp"
+      description = "Allow traffic from Application"
 
-            cidr_blocks = []
-            security_groups = [
-                module.app_sg.security_group_id
-            ]
-        },
-        {
-            from_port = 5432
-            to_port = 5432
-            protocol = "tcp"
-            description = "Allow traffic from Bastion"
+      cidr_blocks = []
+      security_groups = [
+        module.app_sg.security_group_id
+      ]
+    },
+    {
+      from_port   = 5432
+      to_port     = 5432
+      protocol    = "tcp"
+      description = "Allow traffic from Bastion"
 
-            cidr_blocks = []
-            security_groups = [
-                module.bastion_sg.security_group_id
-            ]
-        }
-    ]
+      cidr_blocks = []
+      security_groups = [
+        module.bastion_sg.security_group_id
+      ]
+    }
+  ]
 
-    egress_rules = [
-        {
-            from_port = 0
-            to_port = 0
-            protocol = "-1"
-            description = ""
-            cidr_blocks = ["0.0.0.0/0"]
-            security_groups = []
-        }
-    ]
+  egress_rules = [
+    {
+      from_port       = 0
+      to_port         = 0
+      protocol        = "-1"
+      description     = ""
+      cidr_blocks     = ["0.0.0.0/0"]
+      security_groups = []
+    }
+  ]
 }
 
 module "bastion_sg" {
-    source = "../../../../modules/aws/security_groups"
-    name = "bastion"
-    vpc_id = module.vpc.vpc_id
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/security_groups"
+  name        = "bastion"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
 
-    ingress_rules = [
-        {
-            from_port = 22
-            to_port = 22
-            protocol = "tcp"
-            description = "Allow SSH traffic"
-            cidr_blocks = ["0.0.0.0/0"]
-        }
-    ]
+  ingress_rules = [
+    {
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      description = "Allow SSH traffic"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 
-    egress_rules = [
-        {
-            from_port = 0
-            to_port = 0
-            protocol = "-1"
-            description = "Allow all outbound"
-            cidr_blocks = ["0.0.0.0/0"]
-        }
-    ]
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      description = "Allow all outbound"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
 }
 //-----------------------------------
 
 // SQS_DQL and SQS Queue
 
 module "sqs_dlq" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-dlq"
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/sqs"
+  name        = "app-dlq"
+  environment = var.environment
+  project     = var.project
 }
 
 
 module "sqs" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-queue"
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/sqs"
+  name        = "app-queue"
+  environment = var.environment
+  project     = var.project
 
-    dlq_arn = module.sqs_dlq.queue_arn
+  dlq_arn = module.sqs_dlq.queue_arn
 }
 
 module "sqs_delay" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-delay-queue"
-    environment = var.environment
-    project = var.project
-    delay_seconds = 10
-    visibility_timeout_seconds = 30
-    dlq_arn = module.sqs_delay_dlq.queue_arn
+  source                     = "../../../../modules/aws/sqs"
+  name                       = "app-delay-queue"
+  environment                = var.environment
+  project                    = var.project
+  delay_seconds              = 10
+  visibility_timeout_seconds = 30
+  dlq_arn                    = module.sqs_delay_dlq.queue_arn
 }
 
 module "sqs_delay_dlq" {
-    source = "../../../../modules/aws/sqs"
-    name = "app-delay-dlq"
-    environment = var.environment
-    project = var.project
+  source      = "../../../../modules/aws/sqs"
+  name        = "app-delay-dlq"
+  environment = var.environment
+  project     = var.project
 }
 
 
@@ -304,56 +304,56 @@ module "sqs_delay_dlq" {
 // Aurora Serverless v2 ----------
 
 module "aurora" {
-    source = "../../../../modules/aws/aurora"
-    cluster_identifier = "aurora-db"
-    
-    # Enable Serverless v2
-    instance_class = "db.serverless"
-    num_instances = 1
-    serverlessv2_min_capacity = 3
-    serverlessv2_max_capacity = 16
+  source             = "../../../../modules/aws/aurora"
+  cluster_identifier = "aurora-db"
 
-    engine = "aurora-postgresql"
-    engine_version = "15.14"
-    database_name = "preprod_app_db"
-    master_username = var.master_db_user_name
-    master_password = var.master_db_user_pass
+  # Enable Serverless v2
+  instance_class            = "db.serverless"
+  num_instances             = 1
+  serverlessv2_min_capacity = 3
+  serverlessv2_max_capacity = 16
 
-    subnet_ids = [
-        module.subnets.private_subnet_ids["db-1"],
-        module.subnets.private_subnet_ids["db-2"]
-    ]
-    
-    security_group_ids = [
-        module.db-sg.security_group_id
-    ]
+  engine          = "aurora-postgresql"
+  engine_version  = "15.14"
+  database_name   = "preprod_app_db"
+  master_username = var.master_db_user_name
+  master_password = var.master_db_user_pass
 
-    environment = var.environment
-    project = var.project
+  subnet_ids = [
+    module.subnets.private_subnet_ids["db-1"],
+    module.subnets.private_subnet_ids["db-2"]
+  ]
+
+  security_group_ids = [
+    module.db-sg.security_group_id
+  ]
+
+  environment = var.environment
+  project     = var.project
 }
 //----------------------------------
 
 // --------- Redis ----------
 module "redis" {
-    source = "../../../../modules/aws/elasticache"
-    name = "cache"
-    engine = "redis"
-    node_type = "cache.t3.micro"
-    num_cache_clusters = 1
-    transit_encryption = false
-    at_rest_encryption = false
+  source             = "../../../../modules/aws/elasticache"
+  name               = "cache"
+  engine             = "redis"
+  node_type          = "cache.t3.micro"
+  num_cache_clusters = 1
+  transit_encryption = false
+  at_rest_encryption = false
 
-    subnet_ids = [
-        module.subnets.private_subnet_ids["db-1"],
-        module.subnets.private_subnet_ids["db-2"]
-    ]
+  subnet_ids = [
+    module.subnets.private_subnet_ids["db-1"],
+    module.subnets.private_subnet_ids["db-2"]
+  ]
 
-    security_group_ids = [
-        module.redis-sg.security_group_id
-    ]
+  security_group_ids = [
+    module.redis-sg.security_group_id
+  ]
 
-    environment = var.environment
-    project = var.project
+  environment = var.environment
+  project     = var.project
 }
 
 
@@ -363,36 +363,36 @@ module "redis" {
 # 1. Target Group (Routing destination for Fargate containers)
 
 module "target_group" {
-    source = "../../../../modules/aws/target_group"
-    name = "app-tg-8080"
-    port = 8080
-    protocol = "HTTP"
-    target_type = "ip"
-    vpc_id = module.vpc.vpc_id
-    health_check_path = var.health_check_path
-    environment = var.environment
-    project = var.project
+  source            = "../../../../modules/aws/target_group"
+  name              = "app-tg-8080"
+  port              = 8080
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = var.health_check_path
+  environment       = var.environment
+  project           = var.project
 }
 
 # 2 Application Load Balancer (Receives web traffic)
 
 module "alb" {
-    source = "../../../../modules/aws/alb"
-    name = "app-alb"
-    internal = false
-    security_group_ids = [
-        module.alb_sg.security_group_id
-    ]
+  source   = "../../../../modules/aws/alb"
+  name     = "app-alb"
+  internal = false
+  security_group_ids = [
+    module.alb_sg.security_group_id
+  ]
 
-    subnet_ids = [
-        module.subnets.public_subnet_ids["public-1"],
-        module.subnets.public_subnet_ids["public-2"]
-    ]
+  subnet_ids = [
+    module.subnets.public_subnet_ids["public-1"],
+    module.subnets.public_subnet_ids["public-2"]
+  ]
 
-    http_default_action = "forward"
-    http_target_group_arn = module.target_group.target_group_arn
-    environment = var.environment
-    project = var.project
+  http_default_action   = "forward"
+  http_target_group_arn = module.target_group.target_group_arn
+  environment           = var.environment
+  project               = var.project
 }
 //--------------------------
 
@@ -400,70 +400,70 @@ module "alb" {
 # ECS Fargate Cluster & Service
 
 module "ecs_fargate" {
-    source = "../../../../modules/aws/ecs_fargate"
-    cluster_name = "app-sammmm"
-    service_name = "sammmm-webhook"
-    task_family = "sammmm-webhook-task"
+  source       = "../../../../modules/aws/ecs_fargate"
+  cluster_name = "app-sammmm"
+  service_name = "sammmm-webhook"
+  task_family  = "sammmm-webhook-task"
 
-    cpu = 256
-    memory = 512
-    desired_count = 1
+  cpu           = 256
+  memory        = 512
+  desired_count = 1
 
-    subnet_ids = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
-   ]
+  ]
 
-   security_group_ids = [
+  security_group_ids = [
     module.app_sg.security_group_id
-   ]
+  ]
 
-    # Bind to to ALB
-    target_group_arn = module.target_group.target_group_arn
-    container_name = "webhook"
-    container_port = 8080
+  # Bind to to ALB
+  target_group_arn = module.target_group.target_group_arn
+  container_name   = "webhook"
+  container_port   = 8080
 
-    # Container Specifications
-    container_definitions = jsonencode ([
+  # Container Specifications
+  container_definitions = jsonencode([
+    {
+      name      = "webhook"
+      image     = "${module.ecr.repository_url}:latest"
+      essential = true
+      command   = ["webhook"]
+
+      portMappings = [
         {
-            name = "webhook"
-            image = "${module.ecr.repository_url}:latest"
-            essential = true
-            command = ["webhook"]
-
-            portMappings = [
-                {
-                    containerPort = 8080
-                    hostPort = 8080
-                    protocol = "tcp"
-                }
-            ]
-
-            environment = local.sam_env_vars
-            secrets     = local.sam_secrets
-
-            logConfiguration = {
-                logDriver = "awslogs"
-                options = {
-                    "awslogs-group" = "/ecs/${var.environment}-sammmm-webhook"
-                    "awslogs-region" = var.aws_region
-                    "awslogs-stream-prefix" = "ecs"
-                    "awslogs-create-group" = "true"
-                }
-            }
+          containerPort = 8080
+          hostPort      = 8080
+          protocol      = "tcp"
         }
-    ])
-    environment = var.environment
-    project = var.project
+      ]
+
+      environment = local.sam_env_vars
+      secrets     = local.sam_secrets
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/${var.environment}-sammmm-webhook"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+  environment = var.environment
+  project     = var.project
 }
 
 module "ecr" {
-    source = "../../../../modules/aws/ecr"
-    name = "sammmm-backend"
-    environment = var.environment
-    project = var.project
-    image_tag_mutability = "IMMUTABLE"
-    scan_on_push = false
+  source               = "../../../../modules/aws/ecr"
+  name                 = "sammmm-backend"
+  environment          = var.environment
+  project              = var.project
+  image_tag_mutability = "IMMUTABLE"
+  scan_on_push         = false
 
 }
 
@@ -605,7 +605,7 @@ locals {
 resource "aws_iam_policy" "webhook_policy" {
   name        = "${var.environment}-${var.project}-webhook-policy"
   description = "Permissions for Sammmm webhook service to access SQS and Secrets Manager"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
@@ -640,12 +640,12 @@ resource "aws_iam_role_policy_attachment" "webhook_attachment" {
 resource "aws_iam_policy" "ingest_policy" {
   name        = "${var.environment}-${var.project}-ingest-policy"
   description = "Permissions for Sammmm ingest service to process inbound and queue to flush SQS"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "sqs:ReceiveMessage",
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes",
@@ -685,12 +685,12 @@ resource "aws_iam_role_policy_attachment" "ingest_attachment" {
 resource "aws_iam_policy" "flush_policy" {
   name        = "${var.environment}-${var.project}-flush-policy"
   description = "Permissions for Sammmm flush and migrate service to read flush SQS and Secrets Manager"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "sqs:ReceiveMessage",
           "sqs:DeleteMessage",
           "sqs:SendMessage",
@@ -727,18 +727,18 @@ module "ecs_execution_role" {
   source             = "../../../../modules/aws/iam_role"
   name               = "${var.environment}-${var.project}-ecs-execution-role"
   assume_role_policy = local.ecs_task_assume_role_policy
-  policy_arns        = [
+  policy_arns = [
     "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
   ]
-  environment        = var.environment
-  project            = var.project
+  environment = var.environment
+  project     = var.project
 }
 
 # Task Execution Role Secrets Policy (Allows ECS to fetch secrets at startup and write/create log groups)
 resource "aws_iam_policy" "ecs_execution_secrets_policy" {
   name        = "${var.environment}-${var.project}-ecs-execution-secrets"
   description = "Allows ECS Execution Role to fetch application secrets from Secrets Manager at startup and manage log groups"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
@@ -747,8 +747,8 @@ resource "aws_iam_policy" "ecs_execution_secrets_policy" {
         Resource = ["*"]
       },
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"
@@ -793,21 +793,21 @@ module "ecs_ingest" {
   desired_count      = 1
   launch_type        = "FARGATE"
 
-  subnet_ids         = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
   security_group_ids = [
     module.app_sg.security_group_id
   ]
-  assign_public_ip   = false
+  assign_public_ip = false
 
   container_definitions = jsonencode([
     {
-      name      = "ingest"
-      image     = "${module.ecr.repository_url}:latest"
-      essential = true
-      command   = ["ingest"]
+      name         = "ingest"
+      image        = "${module.ecr.repository_url}:latest"
+      essential    = true
+      command      = ["ingest"]
       portMappings = []
 
       environment = local.sam_env_vars
@@ -841,21 +841,21 @@ module "ecs_flush" {
   desired_count      = 1
   launch_type        = "FARGATE"
 
-  subnet_ids         = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
   security_group_ids = [
     module.app_sg.security_group_id
   ]
-  assign_public_ip   = false
+  assign_public_ip = false
 
   container_definitions = jsonencode([
     {
-      name      = "flush"
-      image     = "${module.ecr.repository_url}:latest"
-      essential = true
-      command   = ["flush"]
+      name         = "flush"
+      image        = "${module.ecr.repository_url}:latest"
+      essential    = true
+      command      = ["flush"]
       portMappings = []
 
       environment = local.sam_env_vars
@@ -885,8 +885,8 @@ data "aws_ssm_parameter" "al2023_ami" {
 }
 
 module "bastion_role" {
-  source             = "../../../../modules/aws/iam_role"
-  name               = "${var.environment}-${var.project}-bastion-role"
+  source = "../../../../modules/aws/iam_role"
+  name   = "${var.environment}-${var.project}-bastion-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -898,8 +898,8 @@ module "bastion_role" {
   policy_arns = [
     "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   ]
-  environment        = var.environment
-  project            = var.project
+  environment = var.environment
+  project     = var.project
 }
 
 resource "aws_iam_instance_profile" "bastion_profile" {
