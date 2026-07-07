@@ -14,6 +14,10 @@ resource "aws_ecs_task_definition" "task" {
     Environment = var.environment
     Project     = var.project
   }
+
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
 }
 
 resource "aws_ecs_service" "service" {

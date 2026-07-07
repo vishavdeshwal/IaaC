@@ -600,12 +600,12 @@ resource "aws_cloudwatch_log_group" "prod_worker_payment" {
 
 
 resource "aws_iam_policy" "ecs_s3_env_policy" {
-  name        = "${var.environment}-ecs-s3-env-policy"
-  path        = "/"
+  name = "${var.environment}-ecs-s3-env-policy"
+  path = "/"
   policy = jsonencode({
     Statement = [{
-      Action   = ["s3:GetObject"]
-      Effect   = "Allow"
+      Action = ["s3:GetObject"]
+      Effect = "Allow"
       Resource = [
         "arn:aws:s3:::production-${lower(var.project)}-v3-uploads/worker-env/worker.env",
         "arn:aws:s3:::production-${lower(var.project)}-v3-uploads/backend-env/backend.env"
@@ -653,11 +653,11 @@ resource "aws_iam_role_policy_attachment" "ecs_s3_env_attachment" {
 }
 
 resource "aws_iam_policy" "ecs_dynamodb_sqs_policy" {
-  name        = "production-ecs-dynamodb-sqs-policy"
-  path        = "/"
+  name = "production-ecs-dynamodb-sqs-policy"
+  path = "/"
   policy = jsonencode({
     Statement = [{
-      Action   = [
+      Action = [
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:UpdateItem",
@@ -668,14 +668,14 @@ resource "aws_iam_policy" "ecs_dynamodb_sqs_policy" {
         "dynamodb:BatchGetItem",
         "dynamodb:BatchWriteItem"
       ]
-      Effect   = "Allow"
+      Effect = "Allow"
       Resource = [
         "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-*",
         "arn:aws:dynamodb:us-east-1:692137657276:table/production_altrx-*/index/*"
       ]
-      Sid      = "DynamoDBAccess"
+      Sid = "DynamoDBAccess"
       }, {
-      Action   = [
+      Action = [
         "sqs:SendMessage",
         "sqs:ReceiveMessage",
         "sqs:DeleteMessage",
@@ -683,13 +683,13 @@ resource "aws_iam_policy" "ecs_dynamodb_sqs_policy" {
         "sqs:GetQueueUrl",
         "sqs:ChangeMessageVisibility"
       ]
-      Effect   = "Allow"
+      Effect = "Allow"
       Resource = [
         "arn:aws:sqs:us-east-1:692137657276:production_altrx-*",
         "arn:aws:sqs:us-east-1:692137657276:altrx-reconciler-trigger",
         "arn:aws:sqs:us-east-1:692137657276:altrx-reconciler-trigger-dlq"
       ]
-      Sid      = "SQSAccess"
+      Sid = "SQSAccess"
     }]
     Version = "2012-10-17"
   })
@@ -1077,20 +1077,20 @@ module "prod_strapie_db" {
   username              = "postgres"
   password              = "ProductionSecurePass123!"
 
-  subnet_ids             = [
+  subnet_ids = [
     module.subnets.private_subnet_ids["private1"],
     module.subnets.private_subnet_ids["private4"]
   ]
-  security_group_ids     = [module.sg_strapie_db.security_group_id]
-  multi_az               = true
-  publicly_accessible    = false
-  storage_encrypted      = true
+  security_group_ids      = [module.sg_strapie_db.security_group_id]
+  multi_az                = true
+  publicly_accessible     = false
+  storage_encrypted       = true
   backup_retention_period = 7
-  backup_window          = "07:13-07:43"
-  maintenance_window     = "wed:09:57-wed:10:27"
-  skip_final_snapshot    = true
-  environment            = var.environment
-  project                = var.project
+  backup_window           = "07:13-07:43"
+  maintenance_window      = "wed:09:57-wed:10:27"
+  skip_final_snapshot     = true
+  environment             = var.environment
+  project                 = var.project
 }
 
 # 5. EC2 Instance Profile (Uses the existing global "altrx_ssm_role")
@@ -1144,12 +1144,12 @@ module "strapie_s3_policy" {
   source      = "../../../../modules/aws/iam_policy"
   name        = "${var.environment}-${var.project}-strapie-s3-access"
   description = "Allows Production Strapie Server to access its dedicated S3 bucket"
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = [
+        Effect = "Allow"
+        Action = [
           "s3:GetObject",
           "s3:PutObject",
           "s3:DeleteObject",
@@ -1227,20 +1227,20 @@ module "cv_case_events_dlq" {
 }
 
 module "cv_case_events" {
-  source                     = "../../../../modules/aws/sqs"
-  name                       = "cv-case-events"
-  environment                = var.environment
-  project                    = var.project
-  name_override              = var.environment == "prod" ? "cv-case-events.fifo" : "cv-case-events-${var.environment}.fifo"
-  fifo_queue                 = true
+  source                      = "../../../../modules/aws/sqs"
+  name                        = "cv-case-events"
+  environment                 = var.environment
+  project                     = var.project
+  name_override               = var.environment == "prod" ? "cv-case-events.fifo" : "cv-case-events-${var.environment}.fifo"
+  fifo_queue                  = true
   content_based_deduplication = false
-  visibility_timeout_seconds = 60
-  message_retention_seconds  = 345600
-  max_message_size           = 262144
-  delay_seconds              = 0
-  receive_wait_time_seconds  = 0
-  dlq_arn                    = module.cv_case_events_dlq.queue_arn
-  max_receive_count          = 5
+  visibility_timeout_seconds  = 60
+  message_retention_seconds   = 345600
+  max_message_size            = 262144
+  delay_seconds               = 0
+  receive_wait_time_seconds   = 0
+  dlq_arn                     = module.cv_case_events_dlq.queue_arn
+  max_receive_count           = 5
   policy = jsonencode({
     Id = "__default_policy_ID"
     Statement = [{
@@ -1285,7 +1285,7 @@ module "ecr_prod_cv_case_events" {
 
 data "aws_iam_policy_document" "api_cv_case_events_policy_doc" {
   statement {
-    actions   = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
+    actions = ["sqs:SendMessage", "sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes"]
     resources = [
       module.cv_case_events.queue_arn,
       module.cv_case_events_dlq.queue_arn
@@ -1296,7 +1296,7 @@ data "aws_iam_policy_document" "api_cv_case_events_policy_doc" {
     resources = [module.dynamodb_processed_events.table_arn]
   }
   statement {
-    actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+    actions = ["logs:CreateLogStream", "logs:PutLogEvents"]
     resources = [
       "${module.prod_cv_case_events_log_group.log_group_arn}:*"
     ]
@@ -1327,7 +1327,7 @@ module "ecs_cv_case_events_service" {
   launch_type                  = var.ecs_launch_type
   task_definition_arn_override = data.aws_ecs_task_definition.prod_cv_case_events.arn
 
-  subnet_ids         = [module.subnets.private_subnet_ids["private3"], module.subnets.private_subnet_ids["private4"]]
+  subnet_ids = [module.subnets.private_subnet_ids["private3"], module.subnets.private_subnet_ids["private4"]]
 
   security_group_ids = [module.prod_worker_sg.security_group_id]
   assign_public_ip   = true
@@ -1487,5 +1487,138 @@ resource "aws_cloudwatch_metric_alarm" "carevalidate_webhook_invalid_signature" 
   }
 }
 
+# =============================================================
+# Autoscaling Configurations (Imported from Production)
+# =============================================================
 
+resource "aws_appautoscaling_target" "backend" {
+  service_namespace  = "ecs"
+  resource_id        = "service/Prod-Altrx/Prod-Backend"
+  scalable_dimension = "ecs:service:DesiredCount"
+  min_capacity       = 2
+  max_capacity       = 10
+}
 
+resource "aws_appautoscaling_policy" "backend_cpu" {
+  name               = "Backend_Autoscaling"
+  policy_type        = "TargetTrackingScaling"
+  service_namespace  = aws_appautoscaling_target.backend.service_namespace
+  resource_id        = aws_appautoscaling_target.backend.resource_id
+  scalable_dimension = aws_appautoscaling_target.backend.scalable_dimension
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = 60.0
+    scale_out_cooldown = 300
+    scale_in_cooldown  = 300
+    disable_scale_in   = false
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+  }
+}
+
+resource "aws_appautoscaling_policy" "backend_memory" {
+  name               = "memory_auto_scaling"
+  policy_type        = "TargetTrackingScaling"
+  service_namespace  = aws_appautoscaling_target.backend.service_namespace
+  resource_id        = aws_appautoscaling_target.backend.resource_id
+  scalable_dimension = aws_appautoscaling_target.backend.scalable_dimension
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = 70.0
+    scale_out_cooldown = 120
+    scale_in_cooldown  = 120
+    disable_scale_in   = false
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+  }
+}
+
+resource "aws_appautoscaling_target" "worker_payment" {
+  service_namespace  = "ecs"
+  resource_id        = "service/Prod-Altrx/Prod-Worker-Payment"
+  scalable_dimension = "ecs:service:DesiredCount"
+  min_capacity       = 2
+  max_capacity       = 10
+}
+
+resource "aws_appautoscaling_policy" "worker_scaling" {
+  name               = "Worker_scaling"
+  policy_type        = "TargetTrackingScaling"
+  service_namespace  = aws_appautoscaling_target.worker_payment.service_namespace
+  resource_id        = aws_appautoscaling_target.worker_payment.resource_id
+  scalable_dimension = aws_appautoscaling_target.worker_payment.scalable_dimension
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = 60.0
+    scale_out_cooldown = 300
+    scale_in_cooldown  = 300
+    disable_scale_in   = false
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+  }
+}
+
+resource "aws_appautoscaling_policy" "worker_backlog" {
+  name               = "Worker-BacklogPerTask"
+  policy_type        = "TargetTrackingScaling"
+  service_namespace  = aws_appautoscaling_target.worker_payment.service_namespace
+  resource_id        = aws_appautoscaling_target.worker_payment.resource_id
+  scalable_dimension = aws_appautoscaling_target.worker_payment.scalable_dimension
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = 100
+    scale_out_cooldown = 60
+    scale_in_cooldown  = 300
+
+    customized_metric_specification {
+      metrics {
+        id    = "m1"
+        label = "MessagesVisible"
+        metric_stat {
+          metric {
+            namespace   = "AWS/SQS"
+            metric_name = "ApproximateNumberOfMessagesVisible"
+            dimensions {
+              name  = "QueueName"
+              value = "production_altrx-payment-events"
+            }
+          }
+          stat = "Maximum"
+        }
+        return_data = false
+      }
+      metrics {
+        id    = "m2"
+        label = "RunningTasks"
+        metric_stat {
+          metric {
+            namespace   = "ECS/ContainerInsights"
+            metric_name = "RunningTaskCount"
+            dimensions {
+              name  = "ClusterName"
+              value = "Prod-Altrx"
+            }
+            dimensions {
+              name  = "ServiceName"
+              value = "Prod-Worker-Payment"
+            }
+          }
+          stat = "Average"
+        }
+        return_data = false
+      }
+      metrics {
+        id          = "e1"
+        label       = "BacklogPerTask"
+        expression  = "m1 / m2"
+        return_data = true
+      }
+    }
+  }
+}

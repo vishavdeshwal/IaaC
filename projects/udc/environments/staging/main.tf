@@ -564,7 +564,7 @@ module "ecs_svc_be" {
       portMappings = [
         {
           containerPort = 8080
-          hostPort      = 0
+          hostPort      = 8080
         }
       ]
       environment = [
@@ -629,7 +629,7 @@ module "ecs_svc_truedesk" {
       portMappings = [
         {
           containerPort = 8081
-          hostPort      = 0
+          hostPort      = 8081
         }
       ]
       logConfiguration = {
@@ -667,7 +667,7 @@ module "ecs_svc_master_web" {
       portMappings = [
         {
           containerPort = 3000
-          hostPort      = 0
+          hostPort      = 3000
         }
       ]
       environment = [
@@ -714,7 +714,7 @@ module "ecs_svc_master_admin" {
       portMappings = [
         {
           containerPort = 3001
-          hostPort      = 0
+          hostPort      = 3001
         }
       ]
       environment = [
@@ -766,7 +766,7 @@ module "ecs_svc_student_web" {
       portMappings = [
         {
           containerPort = 3002
-          hostPort      = 0
+          hostPort      = 3002
         }
       ]
       environment = [
@@ -817,7 +817,7 @@ module "ecs_svc_instructor_web" {
       portMappings = [
         {
           containerPort = 3003
-          hostPort      = 0
+          hostPort      = 3003
         }
       ]
       environment = [
@@ -944,7 +944,7 @@ module "backend_secrets" {
   secret_string = jsonencode(merge(
     var.backend_secrets,
     {
-      "MONGO_DB_INSTANCE" = "mongodb://${var.docdb_master_username}:${var.docdb_master_password}@${module.documentdb.endpoint}:27017/udc-be-v8?retryWrites=false"
+      "MONGO_DB_INSTANCE" = "mongodb://${var.docdb_master_username}:${var.docdb_master_password}@${module.documentdb.endpoint}:27017/udc-be-v8?retryWrites=false&tls=true&tlsInsecure=true"
     }
   ))
   recovery_window_in_days = 0 # 0 for staging, can be changed for prod
