@@ -344,6 +344,24 @@ module "sqs_scan" {
   max_receive_count          = 3
   dlq_arn                    = module.sqs_scan_dlq.queue_arn
 }
+
+module "sqs_flush_dlq" {
+  source      = "../../../../modules/aws/sqs"
+  name        = "app-flush-dlq"
+  environment = var.environment
+  project     = var.project
+  fifo_queue  = true
+}
+
+module "sqs_flush" {
+  source                     = "../../../../modules/aws/sqs"
+  name                       = "app-flush"
+  environment                = var.environment
+  project                    = var.project
+  fifo_queue                 = true
+  visibility_timeout_seconds = 180
+  dlq_arn                    = module.sqs_flush_dlq.queue_arn
+}
 //--------------------------------------
 
 
@@ -907,12 +925,28 @@ resource "aws_iam_policy" "flush_policy" {
           "sqs:GetQueueAttributes",
           "sqs:ChangeMessageVisibility"
         ]
-        Resource = [module.sqs_delay.queue_arn]
+        Resource = [
+          module.sqs_delay.queue_arn,
+          module.sqs_scan.queue_arn,
+          module.sqs_render.queue_arn,
+          module.sqs_flush.queue_arn
+        ]
       },
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = ["*"]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::sammmm-${var.environment}-scan-images/*",
+          "arn:aws:s3:::sammmm-${var.environment}-bucket/reports/*"
+        ]
       }
     ]
   })
@@ -1448,4 +1482,29 @@ module "ecs_frontend" {
       }
     }
   ])
+}
+
+resource "aws_appautoscaling_target" "frontend_target" {
+  max_capacity       = 10
+  min_capacity       = 2
+  resource_id        = "service/${module.ecs_cluster.cluster_name}/${var.environment}-${var.project}-sam-frontend"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "frontend_policy" {
+  name               = "${var.environment}-${var.project}-sam-frontend-cpu-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.frontend_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.frontend_target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.frontend_target.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value = 75.0
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+  }
 }

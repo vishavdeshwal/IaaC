@@ -135,6 +135,14 @@ module "app_sg" {
 
   ingress_rules = [
     {
+      from_port       = 3000
+      to_port         = 3000
+      protocol        = "tcp"
+      description     = "Allow frontend traffic from ALB"
+      cidr_blocks     = []
+      security_groups = [module.alb_sg.security_group_id]
+    },
+    {
       from_port       = 8080
       to_port         = 8080
       protocol        = "tcp"
@@ -329,6 +337,24 @@ module "sqs_scan" {
   visibility_timeout_seconds = 90
   max_receive_count          = 3
   dlq_arn                    = module.sqs_scan_dlq.queue_arn
+}
+
+module "sqs_flush_dlq" {
+  source      = "../../../../modules/aws/sqs"
+  name        = "app-flush-dlq"
+  environment = var.environment
+  project     = var.project
+  fifo_queue  = true
+}
+
+module "sqs_flush" {
+  source                     = "../../../../modules/aws/sqs"
+  name                       = "app-flush"
+  environment                = var.environment
+  project                    = var.project
+  fifo_queue                 = true
+  visibility_timeout_seconds = 180
+  dlq_arn                    = module.sqs_flush_dlq.queue_arn
 }
 
 
@@ -843,12 +869,28 @@ resource "aws_iam_policy" "flush_policy" {
           "sqs:GetQueueAttributes",
           "sqs:ChangeMessageVisibility"
         ]
-        Resource = [module.sqs_delay.queue_arn]
+        Resource = [
+          module.sqs_delay.queue_arn,
+          module.sqs_scan.queue_arn,
+          module.sqs_render.queue_arn,
+          module.sqs_flush.queue_arn
+        ]
       },
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
         Resource = ["*"]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::sammmm-${var.environment}-scan-images/*",
+          "arn:aws:s3:::sammmm-${var.environment}-bucket/reports/*"
+        ]
       }
     ]
   })
@@ -1327,4 +1369,123 @@ module "bastion_host" {
   key_name             = var.bastion_key_name
   environment          = var.environment
   project              = var.project
+}
+
+module "target_group_frontend" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "app-tg-frontend-3000"
+  name_override     = "prod-sammmm-tg-frontend-3000"
+  port              = 3000
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/"
+  environment       = var.environment
+  project           = var.project
+}
+
+resource "aws_lb_listener_rule" "frontend" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 50
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_frontend.target_group_arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/*"]
+    }
+  }
+}
+
+module "ecr_frontend" {
+  source               = "../../../../modules/aws/ecr"
+  name                 = "sam-frontend"
+  environment          = var.environment
+  project              = var.project
+  image_tag_mutability = "IMMUTABLE"
+  scan_on_push         = false
+}
+
+module "ecs_frontend" {
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "${var.environment}-${var.project}-sam-frontend"
+  family             = "${var.environment}-${var.project}-sam-frontend-task"
+  environment        = var.environment
+  project            = var.project
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  cpu                = "256"
+  memory             = "512"
+  execution_role_arn = module.webhook_task_exec_role.role_arn
+  task_role_arn      = module.webhook_task_task_role.role_arn
+  desired_count      = 1
+  launch_type        = "FARGATE"
+
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+  health_check_grace_period_seconds  = 60
+
+  subnet_ids = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip = false
+
+  target_group_arn = module.target_group_frontend.target_group_arn
+  container_name   = "frontend"
+  container_port   = 3000
+
+  container_definitions = jsonencode([
+    {
+      name      = "frontend"
+      image     = "${module.ecr_frontend.repository_url}:latest"
+      essential = true
+      portMappings = [
+        {
+          containerPort = 3000
+          hostPort      = 3000
+          protocol      = "tcp"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/prod-sammmm-frontend"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+}
+
+resource "aws_appautoscaling_target" "frontend_target" {
+  max_capacity       = 10
+  min_capacity       = 2
+  resource_id        = "service/${module.ecs_cluster.cluster_name}/${var.environment}-${var.project}-sam-frontend"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "frontend_policy" {
+  name               = "${var.environment}-${var.project}-sam-frontend-cpu-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.frontend_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.frontend_target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.frontend_target.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value = 75.0
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+  }
 }
