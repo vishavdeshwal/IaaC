@@ -12,6 +12,10 @@ resource "aws_db_subnet_group" "rds" {
     Environment = var.environment
     Project     = var.project
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 
