@@ -275,6 +275,40 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+module "backend_secrets" {
+  source        = "../../../../modules/aws/secrets_manager"
+  secret_name   = "${var.environment}-${var.project}-backend-secrets"
+  secret_string = jsonencode(var.backend_secrets)
+  environment   = var.environment
+  project       = var.project
+}
+
+module "ecs_execution_secrets_policy" {
+  source      = "../../../../modules/aws/iam_policy"
+  name        = "${var.environment}-${var.project}-ecs-secrets-policy"
+  description = "Policy to allow ECS execution role to read secrets"
+  is_inline   = true
+  role_name   = module.ecs_execution_role.role_name
+  environment = var.environment
+  project     = var.project
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "logs:CreateLogGroup"
+        ]
+        Resource = [
+          module.backend_secrets.secret_arn,
+          "arn:aws:logs:${var.aws_region}:*:log-group:/ecs/${var.environment}-${var.project}-*"
+        ]
+      }
+    ]
+  })
+}
+
 module "ecs_task_role" {
   source = "../../../../modules/aws/iam_role"
   name   = "${var.environment}-${var.project}-ecs-task-role"
@@ -292,6 +326,34 @@ module "ecs_task_role" {
   })
   environment = var.environment
   project     = var.project
+}
+
+module "ecs_task_s3_policy" {
+  source      = "../../../../modules/aws/iam_policy"
+  name        = "${var.environment}-${var.project}-ecs-s3-policy"
+  description = "Policy to allow ECS tasks to access the S3 media bucket"
+  is_inline   = true
+  role_name   = module.ecs_task_role.role_name
+  environment = var.environment
+  project     = var.project
+  policy      = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.media.arn,
+          "${aws_s3_bucket.media.arn}/*"
+        ]
+      }
+    ]
+  })
 }
 
 module "ec2_ssm_role" {
@@ -618,9 +680,17 @@ module "ecs_backend" {
           "awslogs-group"         = "/ecs/${var.environment}-${var.project}-backend"
         }
       }
-      environment = [
-        { name = "NODE_ENV", value = var.environment }
-      ]
+      environment = concat(
+        [for k, v in var.backend_env_vars : { name = k, value = v }],
+        [
+          { name = "DB_HOST", value = module.rds_postgres.address },
+          { name = "DB_PORT", value = tostring(module.rds_postgres.port) },
+          { name = "REDIS_HOST", value = module.redis.redis_primary_endpoint },
+          { name = "REDIS_PORT", value = tostring(module.redis.redis_port) },
+          { name = "ERP_WEBHOOK_URL", value = module.sqs.queue_url }
+        ]
+      )
+      secrets     = [for k, v in var.backend_secrets : { name = k, valueFrom = "${module.backend_secrets.secret_arn}:${k}::" }]
     }
   ])
 }
@@ -713,23 +783,23 @@ module "target_group_saleor" {
 }
 
 module "alb" {
-  source             = "../../../../modules/aws/alb"
-  name               = "app"
-  security_group_ids = [module.app_sg.security_group_id]
+  source                 = "../../../../modules/aws/alb"
+  name                   = "app"
+  security_group_ids     = [module.app_sg.security_group_id]
   subnet_ids = [
     module.subnets.public_subnet_ids["public-1"],
     module.subnets.public_subnet_ids["public-2"]
   ]
-  # certificate_arn        = var.certificate_arn
-  # https_target_group_arn = module.target_group_frontend.target_group_arn
-  http_default_action   = "forward"
-  http_target_group_arn = module.target_group_frontend.target_group_arn
-  environment           = var.environment
-  project               = var.project
+  certificate_arn        = var.certificate_arn
+  https_target_group_arn = module.target_group_frontend.target_group_arn
+  http_default_action    = "redirect_to_https"
+  http_target_group_arn  = module.target_group_frontend.target_group_arn
+  environment            = var.environment
+  project                = var.project
 }
 
 resource "aws_lb_listener_rule" "backend" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 10
 
   action {
@@ -739,13 +809,13 @@ resource "aws_lb_listener_rule" "backend" {
 
   condition {
     host_header {
-      values = ["api.*"] # e.g. api.alivewellness.com
+      values = ["be-preprod.skinverse.in"]
     }
   }
 }
 
 resource "aws_lb_listener_rule" "saleor" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 20
 
   action {
@@ -755,22 +825,23 @@ resource "aws_lb_listener_rule" "saleor" {
 
   condition {
     host_header {
-      values = ["shop.*"] # e.g. shop.alivewellness.com
+      values = ["saleor-preprod.skinverse.in"]
     }
   }
 }
 
 // --- Strapi ALB Configuration ---
 module "target_group_strapi" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "strapi"
-  port              = 1337
-  protocol          = "HTTP"
-  target_type       = "instance"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/_health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "strapi"
+  port                 = 1337
+  protocol             = "HTTP"
+  target_type          = "instance"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/_health"
+  health_check_matcher = "200-399"
+  environment          = var.environment
+  project              = var.project
 }
 
 resource "aws_lb_target_group_attachment" "strapi" {
@@ -780,7 +851,7 @@ resource "aws_lb_target_group_attachment" "strapi" {
 }
 
 resource "aws_lb_listener_rule" "strapi" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 30
 
   action {
@@ -790,32 +861,50 @@ resource "aws_lb_listener_rule" "strapi" {
 
   condition {
     host_header {
-      values = ["cms.*"] # e.g. cms.alivewellness.com
+      values = ["cms-preprod.skinverse.in"] # e.g. cms.alivewellness.com
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "frontend" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 50
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_frontend.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["fe-preprod.skinverse.in"]
     }
   }
 }
 
 // --- ERP ALB Configuration ---
 module "target_group_erp" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "erp"
-  port              = 8000
-  protocol          = "HTTP"
-  target_type       = "instance"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health" # Assuming /health is the ERP health check
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "erp"
+  name_override        = "preprod-erp-tg-80"
+  port                 = 80
+  protocol             = "HTTP"
+  target_type          = "instance"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health" # Assuming /health is the ERP health check
+  health_check_matcher = "200-399"
+  environment          = var.environment
+  project              = var.project
 }
 
 resource "aws_lb_target_group_attachment" "erp" {
   target_group_arn = module.target_group_erp.target_group_arn
   target_id        = module.erp_server.instance_id
-  port             = 8000
+  port             = 80
 }
 
 resource "aws_lb_listener_rule" "erp" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 40
 
   action {
@@ -825,7 +914,7 @@ resource "aws_lb_listener_rule" "erp" {
 
   condition {
     host_header {
-      values = ["erp.*"] # e.g. erp.alivewellness.com
+      values = ["erp-preprod.skinverse.in"]
     }
   }
 }

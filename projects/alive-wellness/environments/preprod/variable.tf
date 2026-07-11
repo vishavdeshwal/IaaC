@@ -63,3 +63,15 @@ variable "certificate_arn" {
   type        = string
   description = "The ARN of the ACM certificate for the ALB"
 }
+
+variable "backend_env_vars" {
+  type        = map(string)
+  description = "Unsecure environment variables for the Node backend"
+  default     = {}
+}
+
+variable "backend_secrets" {
+  type        = map(string)
+  description = "Sensitive secrets for the Node backend, to be stored in Secrets Manager"
+  default     = {}
+}
