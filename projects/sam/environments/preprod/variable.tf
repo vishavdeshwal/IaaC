@@ -1,10 +1,8 @@
 variable "aws_region" {
-  type    = string
-  default = "ap-south-1"
+  type = string
 }
 variable "aws_profile" {
-  type    = string
-  default = "sam"
+  type = string
 }
 
 variable "vpc_cidr" {
@@ -12,13 +10,11 @@ variable "vpc_cidr" {
 }
 
 variable "environment" {
-  type    = string
-  default = "preprod"
+  type = string
 }
 
 variable "project" {
-  type    = string
-  default = "SAMMMM"
+  type = string
 }
 
 variable "instance_tenancy" {
@@ -81,7 +77,6 @@ variable "secret_clevertap_passcode" {
   type        = string
   sensitive   = true
   description = "The secret Clevertap passcode"
-  default     = "dummy-clevertap-passcode"
 }
 
 variable "bastion_key_name" {
@@ -90,32 +85,40 @@ variable "bastion_key_name" {
   description = "The SSH key pair name for the EC2 bastion instance"
 }
 
-variable "google_api_key" {
+variable "webhook_secret" {
   type        = string
   sensitive   = true
-  description = "Google API Key for Gemini"
+  description = "HMAC secret used to verify incoming webhook payloads"
 }
 
-variable "openai_api_key" {
+variable "secret_google_api_key" {
   type        = string
   sensitive   = true
-  description = "OpenAI API Key"
+  description = "Google API key (Gemini) stored in Secrets Manager"
 }
 
-variable "deeptag_api_key" {
+variable "secret_openai_api_key" {
   type        = string
   sensitive   = true
-  description = "Deeptag API Key"
+  description = "OpenAI API key stored in Secrets Manager"
+  default     = ""
 }
 
-variable "email_smtp_username" {
+variable "secret_deeptag_api_key" {
   type        = string
   sensitive   = true
-  description = "SMTP Username for Email"
+  description = "DeepTag API key stored in Secrets Manager"
 }
 
-variable "email_smtp_password" {
+variable "secret_email_smtp_password" {
   type        = string
   sensitive   = true
-  description = "SMTP Password for Email"
+  description = "SMTP password for outbound email stored in Secrets Manager"
+}
+
+variable "secret_gupshup_numbers" {
+  type        = string
+  sensitive   = true
+  description = "Gupshup whitelisted sender numbers stored in Secrets Manager"
+  default     = ""
 }

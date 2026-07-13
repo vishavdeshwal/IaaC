@@ -359,6 +359,7 @@ module "sqs_flush" {
   environment                = var.environment
   project                    = var.project
   fifo_queue                 = true
+  high_throughput_fifo       = true
   visibility_timeout_seconds = 180
   dlq_arn                    = module.sqs_flush_dlq.queue_arn
 }
@@ -829,120 +830,107 @@ module "webhook_task_task_role" {
   project            = var.project
 }
 
-# 1. Webhook / WebAPI policy (SQS send + Secrets)
-resource "aws_iam_policy" "webhook_policy" {
-  name        = "${var.environment}-${var.project}-webhook-policy"
-  description = "Permissions for Sammmm webhook service to access SQS and Secrets Manager"
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage", "sqs:GetQueueAttributes"]
-        Resource = [module.sqs.queue_arn]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["*"]
-      }
-    ]
-  })
-}
 
-module "webhook_role" {
+# Per-Service Task Roles
+module "dashboard_task_role" {
   source             = "../../../../modules/aws/iam_role"
-  name               = "${var.environment}-${var.project}-webhook-role"
+  name               = "${var.environment}-${var.project}-dashboard-task-role"
   assume_role_policy = local.ecs_task_assume_role_policy
   policy_arns        = []
   environment        = var.environment
   project            = var.project
 }
 
-resource "aws_iam_role_policy_attachment" "webhook_attachment" {
-  role       = module.webhook_role.role_name
-  policy_arn = aws_iam_policy.webhook_policy.arn
+module "webapi_task_role" {
+  source             = "../../../../modules/aws/iam_role"
+  name               = "${var.environment}-${var.project}-webapi-task-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = []
+  environment        = var.environment
+  project            = var.project
 }
 
-# 2. Ingest policy
-resource "aws_iam_policy" "ingest_policy" {
-  name        = "${var.environment}-${var.project}-ingest-policy"
-  description = "Permissions for Sammmm ingest service to process inbound and queue to flush SQS"
+module "webchat_task_role" {
+  source             = "../../../../modules/aws/iam_role"
+  name               = "${var.environment}-${var.project}-webchat-task-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = []
+  environment        = var.environment
+  project            = var.project
+}
+
+resource "aws_iam_policy" "scan_task_policy" {
+  name        = "${var.environment}-${var.project}-scan-task-policy"
+  description = "Permissions for scan task"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = [
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:ChangeMessageVisibility"
-        ]
-        Resource = [module.sqs.queue_arn]
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
+        Resource = [module.sqs_scan.queue_arn]
       },
       {
         Effect   = "Allow"
         Action   = ["sqs:SendMessage"]
-        Resource = [module.sqs_delay.queue_arn]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["*"]
+        Resource = [module.sqs_flush.queue_arn]
       }
     ]
   })
 }
 
-module "ingest_role" {
+module "scan_task_role" {
   source             = "../../../../modules/aws/iam_role"
-  name               = "${var.environment}-${var.project}-ingest-role"
+  name               = "${var.environment}-${var.project}-scan-task-role"
   assume_role_policy = local.ecs_task_assume_role_policy
-  policy_arns        = []
+  policy_arns        = [aws_iam_policy.scan_task_policy.arn]
   environment        = var.environment
   project            = var.project
 }
 
-resource "aws_iam_role_policy_attachment" "ingest_attachment" {
-  role       = module.ingest_role.role_name
-  policy_arn = aws_iam_policy.ingest_policy.arn
-}
-
-# 3. Flush policy
-resource "aws_iam_policy" "flush_policy" {
-  name        = "${var.environment}-${var.project}-flush-policy"
-  description = "Permissions for Sammmm flush and migrate service to read flush SQS and Secrets Manager"
+resource "aws_iam_policy" "pdf_task_policy" {
+  name        = "${var.environment}-${var.project}-pdf-task-policy"
+  description = "Permissions for pdf task"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = [
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:SendMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:ChangeMessageVisibility"
-        ]
-        Resource = [
-          module.sqs_delay.queue_arn,
-          module.sqs_scan.queue_arn,
-          module.sqs_render.queue_arn,
-          module.sqs_flush.queue_arn
-        ]
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
+        Resource = [module.sqs_render.queue_arn]
       },
       {
         Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["*"]
+        Action   = ["sqs:SendMessage"]
+        Resource = [module.sqs_flush.queue_arn]
+      }
+    ]
+  })
+}
+
+module "pdf_task_role" {
+  source             = "../../../../modules/aws/iam_role"
+  name               = "${var.environment}-${var.project}-pdf-task-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = [aws_iam_policy.pdf_task_policy.arn]
+  environment        = var.environment
+  project            = var.project
+}
+
+resource "aws_iam_policy" "flush_task_policy" {
+  name        = "${var.environment}-${var.project}-flush-task-policy"
+  description = "Permissions for flush task"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
+        Resource = [module.sqs_flush.queue_arn]
       },
       {
         Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject"
-        ]
+        Action = ["s3:PutObject", "s3:GetObject"]
         Resource = [
           "arn:aws:s3:::sammmm-${var.environment}-scan-images/*",
           "arn:aws:s3:::sammmm-${var.environment}-bucket/reports/*"
@@ -952,18 +940,13 @@ resource "aws_iam_policy" "flush_policy" {
   })
 }
 
-module "flush_role" {
+module "flush_task_role" {
   source             = "../../../../modules/aws/iam_role"
-  name               = "${var.environment}-${var.project}-flush-role"
+  name               = "${var.environment}-${var.project}-flush-task-role"
   assume_role_policy = local.ecs_task_assume_role_policy
-  policy_arns        = []
+  policy_arns        = [aws_iam_policy.flush_task_policy.arn]
   environment        = var.environment
   project            = var.project
-}
-
-resource "aws_iam_role_policy_attachment" "flush_attachment" {
-  role       = module.flush_role.role_name
-  policy_arn = aws_iam_policy.flush_policy.arn
 }
 
 # 4. Shared ECS task execution role (used by ingest, flush, pdf, scan)
@@ -987,7 +970,7 @@ resource "aws_iam_policy" "ecs_execution_secrets_policy" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["*"]
+        Resource = ["arn:aws:secretsmanager:${var.aws_region}:515966492403:secret:${var.environment}/${var.project}/*"]
       },
       {
         Effect = "Allow"
@@ -1013,62 +996,10 @@ resource "aws_iam_role_policy_attachment" "fargate_execution_secrets" {
   policy_arn = aws_iam_policy.ecs_execution_secrets_policy.arn
 }
 
-# Attach webhook SQS + secret permissions to the webhook-task task role
-resource "aws_iam_role_policy_attachment" "fargate_task_webhook" {
-  role       = module.webhook_task_task_role.role_name
-  policy_arn = aws_iam_policy.webhook_policy.arn
-}
 
 // =============================================================
 // ECS Services
 // =============================================================
-
-# Ingest — reads from app-queue, writes to app-delay-queue
-module "ecs_ingest" {
-  source             = "../../../../modules/aws/ecs_service"
-  service_name       = "${var.environment}-${var.project}-sammmm-ingest"
-  family             = "${var.environment}-${var.project}-sammmm-ingest-task"
-  cluster_arn        = module.ecs_cluster.cluster_arn
-  cpu                = "256"
-  memory             = "512"
-  execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.ingest_role.role_arn
-  desired_count      = 1
-  launch_type        = "FARGATE"
-
-  subnet_ids = [
-    module.subnets.private_subnet_ids["app-1"],
-    module.subnets.private_subnet_ids["app-2"]
-  ]
-  security_group_ids = [
-    module.app_sg.security_group_id
-  ]
-  assign_public_ip = false
-
-  container_definitions = jsonencode([
-    {
-      name         = "ingest"
-      image        = "${module.ecr.repository_url}:latest"
-      essential    = true
-      command      = ["ingest"]
-      portMappings = []
-      environment  = local.sam_env_vars
-      secrets      = local.sam_secrets
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = "/ecs/staging-SAMMMM-sammmm-ingest"
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-          "awslogs-create-group"  = "true"
-        }
-      }
-    }
-  ])
-
-  environment = var.environment
-  project     = var.project
-}
 
 # Flush — reads from app-delay-queue
 module "ecs_flush" {
@@ -1079,7 +1010,7 @@ module "ecs_flush" {
   cpu                = "256"
   memory             = "512"
   execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.flush_role.role_arn
+  task_role_arn      = module.flush_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
 
@@ -1297,7 +1228,7 @@ module "ecs_pdf" {
   cpu                = "1024"
   memory             = "2048"
   execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.flush_role.role_arn
+  task_role_arn      = module.flush_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
 
@@ -1344,7 +1275,7 @@ module "ecs_scan" {
   cpu                = "512"
   memory             = "1024"
   execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.flush_role.role_arn
+  task_role_arn      = module.flush_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
 
@@ -1503,7 +1434,7 @@ resource "aws_appautoscaling_policy" "frontend_policy" {
     predefined_metric_specification {
       predefined_metric_type = "ECSServiceAverageCPUUtilization"
     }
-    target_value = 75.0
+    target_value       = 75.0
     scale_in_cooldown  = 300
     scale_out_cooldown = 60
   }

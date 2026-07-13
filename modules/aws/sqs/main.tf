@@ -12,7 +12,8 @@ resource "aws_sqs_queue" "queue" {
   name                        = local.queue_name
   fifo_queue                  = var.fifo_queue
   content_based_deduplication = var.fifo_queue ? var.content_based_deduplication : null
-
+  deduplication_scope         = var.fifo_queue && var.high_throughput_fifo ? "messageGroup" : null
+  fifo_throughput_limit       = var.fifo_queue && var.high_throughput_fifo ? "perMessageGroupId" : null
   visibility_timeout_seconds = var.visibility_timeout_seconds
   message_retention_seconds  = var.message_retention_seconds
   delay_seconds              = var.delay_seconds

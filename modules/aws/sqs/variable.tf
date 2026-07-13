@@ -76,4 +76,10 @@ variable "policy" {
   default = null
 }
 
+variable "high_throughput_fifo" {
+  type        = bool
+  default     = false
+  description = "Enable High-Throughput FIFO (Sets DeduplicationScope=messageGroup, FifoThroughputLimit=perMessageGroupId)"
+}
+
 

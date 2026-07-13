@@ -761,11 +761,11 @@ module "target_group_frontend" {
 module "target_group_backend" {
   source            = "../../../../modules/aws/target_group"
   name              = "back"
-  port              = 8080
+  port              = 3000
   protocol          = "HTTP"
   target_type       = "ip"
   vpc_id            = module.vpc.vpc_id
-  health_check_path = "/healthz"
+  health_check_path = "/health"
   environment       = var.environment
   project           = var.project
 }
@@ -877,7 +877,7 @@ resource "aws_lb_listener_rule" "frontend" {
 
   condition {
     host_header {
-      values = ["fe-preprod.skinverse.in"]
+      values = ["fe-preprod.skinverse.in", "www.fe-preprod.skinverse.in"]
     }
   }
 }

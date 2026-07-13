@@ -43,21 +43,6 @@ output "sqs_delay_queue_arn" {
   description = "ARN of the delay SQS queue"
 }
 
-output "webhook_role_arn" {
-  value       = module.webhook_role.role_arn
-  description = "ARN of the webhook service task IAM role"
-}
-
-output "ingest_role_arn" {
-  value       = module.ingest_role.role_arn
-  description = "ARN of the ingest service task IAM role"
-}
-
-output "flush_role_arn" {
-  value       = module.flush_role.role_arn
-  description = "ARN of the flush/migrate service task IAM role"
-}
-
 output "ecs_execution_role_arn" {
   value       = module.ecs_execution_role.role_arn
   description = "ARN of the ECS Fargate execution IAM role"

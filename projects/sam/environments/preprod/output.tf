@@ -29,13 +29,8 @@ output "ecr_repository_url" {
 }
 
 output "ecs_cluster_name" {
-  value       = module.ecs_fargate.cluster_name
+  value       = module.ecs_cluster.cluster_name
   description = "The name of the ECS Cluster"
-}
-
-output "ecs_service_name" {
-  value       = module.ecs_fargate.service_name
-  description = "The name of the ECS Service"
 }
 
 output "sqs_delay_queue_url" {
@@ -46,21 +41,6 @@ output "sqs_delay_queue_url" {
 output "sqs_delay_queue_arn" {
   value       = module.sqs_delay.queue_arn
   description = "ARN of the delay SQS queue"
-}
-
-output "webhook_role_arn" {
-  value       = module.webhook_role.role_arn
-  description = "ARN of the webhook service task IAM role"
-}
-
-output "ingest_role_arn" {
-  value       = module.ingest_role.role_arn
-  description = "ARN of the ingest service task IAM role"
-}
-
-output "flush_role_arn" {
-  value       = module.flush_role.role_arn
-  description = "ARN of the flush/migrate service task IAM role"
 }
 
 output "ecs_execution_role_arn" {
@@ -76,4 +56,9 @@ output "bastion_public_ip" {
 output "bastion_instance_id" {
   value       = module.bastion_host.instance_id
   description = "Instance ID of the EC2 bastion instance"
+}
+
+output "sam_frontend_ecr_repository_url" {
+  value       = module.ecr_frontend.repository_url
+  description = "The URL of the ECR repository for sam-frontend"
 }
