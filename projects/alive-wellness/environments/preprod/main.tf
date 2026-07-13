@@ -585,7 +585,7 @@ module "erp_server" {
 
 module "ecs_cluster" {
   source       = "../../../../modules/aws/ecs_cluster"
-  cluster_name = "app-cluster"
+  cluster_name = "pre-prod-app-cluster"
   environment  = var.environment
   project      = var.project
 }
