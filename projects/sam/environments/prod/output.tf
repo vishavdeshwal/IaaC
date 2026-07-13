@@ -48,10 +48,6 @@ output "webhook_role_arn" {
   description = "ARN of the webhook service task IAM role"
 }
 
-output "ingest_role_arn" {
-  value       = module.ingest_role.role_arn
-  description = "ARN of the ingest service task IAM role"
-}
 
 output "flush_role_arn" {
   value       = module.flush_role.role_arn

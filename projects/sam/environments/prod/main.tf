@@ -808,50 +808,6 @@ resource "aws_iam_role_policy_attachment" "webhook_attachment" {
   policy_arn = aws_iam_policy.webhook_policy.arn
 }
 
-# 2. Ingest policy
-resource "aws_iam_policy" "ingest_policy" {
-  name        = "${var.environment}-${var.project}-ingest-policy"
-  description = "Permissions for Sammmm ingest service to process inbound and queue to flush SQS"
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:ChangeMessageVisibility"
-        ]
-        Resource = [module.sqs.queue_arn]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["sqs:SendMessage"]
-        Resource = [module.sqs_delay.queue_arn]
-      },
-      {
-        Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["*"]
-      }
-    ]
-  })
-}
-
-module "ingest_role" {
-  source             = "../../../../modules/aws/iam_role"
-  name               = "${var.environment}-${var.project}-ingest-role"
-  assume_role_policy = local.ecs_task_assume_role_policy
-  policy_arns        = []
-  environment        = var.environment
-  project            = var.project
-}
-
-resource "aws_iam_role_policy_attachment" "ingest_attachment" {
-  role       = module.ingest_role.role_name
-  policy_arn = aws_iam_policy.ingest_policy.arn
-}
 
 # 3. Flush policy
 resource "aws_iam_policy" "flush_policy" {
@@ -980,50 +936,6 @@ module "ecs_cluster" {
 // ECS Services
 // =============================================================
 
-# Ingest — reads from app-queue, writes to app-delay-queue
-module "ecs_ingest" {
-  source             = "../../../../modules/aws/ecs_service"
-  service_name       = "${var.environment}-${var.project}-sammmm-ingest"
-  family             = "${var.environment}-${var.project}-sammmm-ingest-task"
-  cluster_arn        = module.ecs_cluster.cluster_arn
-  cpu                = "256"
-  memory             = "512"
-  execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.ingest_role.role_arn
-  desired_count      = 1
-  launch_type        = "FARGATE"
-
-  subnet_ids = [
-    module.subnets.private_subnet_ids["app-1"],
-    module.subnets.private_subnet_ids["app-2"]
-  ]
-  security_group_ids = [module.app_sg.security_group_id]
-  assign_public_ip   = false
-
-  container_definitions = jsonencode([
-    {
-      name         = "ingest"
-      image        = "${module.ecr.repository_url}:latest"
-      essential    = true
-      command      = ["ingest"]
-      portMappings = []
-      environment  = local.sam_env_vars
-      secrets      = local.sam_secrets
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-sammmm-ingest"
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-          "awslogs-create-group"  = "true"
-        }
-      }
-    }
-  ])
-
-  environment = var.environment
-  project     = var.project
-}
 
 # Flush — reads from app-delay-queue
 module "ecs_flush" {
@@ -1484,7 +1396,7 @@ resource "aws_appautoscaling_policy" "frontend_policy" {
     predefined_metric_specification {
       predefined_metric_type = "ECSServiceAverageCPUUtilization"
     }
-    target_value = 75.0
+    target_value       = 75.0
     scale_in_cooldown  = 300
     scale_out_cooldown = 60
   }
