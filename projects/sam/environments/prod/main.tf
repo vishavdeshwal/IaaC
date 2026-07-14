@@ -494,9 +494,15 @@ module "alb" {
   project     = var.project
 }
 
+# Attach the new SNI certificate for co-create subdomains
+resource "aws_lb_listener_certificate" "co_create_cert" {
+  listener_arn    = module.alb.https_listener_arn
+  certificate_arn = "arn:aws:acm:ap-south-1:515966492403:certificate/747cd873-81bb-42a1-90d1-e34d7a71ee81"
+}
+
 # WebSocket paths routed to webchat (priority 5 — must be before webapi)
 resource "aws_lb_listener_rule" "webchat" {
-  listener_arn = module.alb.https_listener_arn
+  listener_arn = module.alb.http_listener_arn
   priority     = 5
 
   action {
@@ -512,8 +518,24 @@ resource "aws_lb_listener_rule" "webchat" {
 }
 
 # General API paths routed to webapi (priority 10)
+resource "aws_lb_listener_rule" "dashboard" {
+  listener_arn = module.alb.http_listener_arn
+  priority     = 40
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_dashboard.target_group_arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/dashboard/*"]
+    }
+  }
+}
+
 resource "aws_lb_listener_rule" "webapi" {
-  listener_arn = module.alb.https_listener_arn
+  listener_arn = module.alb.http_listener_arn
   priority     = 10
 
   action {
@@ -529,19 +551,6 @@ resource "aws_lb_listener_rule" "webapi" {
 }
 
 # Dedicated HTTPS listener on port 8443 for dashboard
-resource "aws_lb_listener" "dashboard" {
-  load_balancer_arn = module.alb.alb_arn
-  port              = "8443"
-  protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-2021-06"
-  certificate_arn   = var.certificate_arn
-
-  default_action {
-    type             = "forward"
-    target_group_arn = module.target_group_dashboard.target_group_arn
-  }
-}
-
 
 // =============================================================
 // ECR
@@ -847,6 +856,11 @@ resource "aws_iam_policy" "flush_policy" {
           "arn:aws:s3:::sammmm-${var.environment}-scan-images/*",
           "arn:aws:s3:::sammmm-${var.environment}-bucket/reports/*"
         ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = ["bedrock:InvokeModel"]
+        Resource = ["*"]
       }
     ]
   })
@@ -1297,7 +1311,7 @@ module "target_group_frontend" {
 }
 
 resource "aws_lb_listener_rule" "frontend" {
-  listener_arn = module.alb.https_listener_arn
+  listener_arn = module.alb.http_listener_arn
   priority     = 50
 
   action {
