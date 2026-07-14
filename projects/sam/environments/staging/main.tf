@@ -522,19 +522,13 @@ module "alb" {
 
   http_port            = 443
   http_protocol        = "HTTPS"
-  http_certificate_arn = "arn:aws:acm:ap-south-1:515966492403:certificate/4e49fa25-2908-4a2e-8321-82ff421bda58"
+  http_certificate_arn = "arn:aws:acm:ap-south-1:515966492403:certificate/21d69985-198b-435c-aa1b-7a47c45d5510"
   ssl_policy           = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
 
   http_default_action   = "forward"
   http_target_group_arn = module.target_group.target_group_arn
   environment           = var.environment
   project               = var.project
-}
-
-# Attach the new SNI certificate for co-create subdomains
-resource "aws_lb_listener_certificate" "co_create_cert" {
-  listener_arn    = module.alb.http_listener_arn
-  certificate_arn = "arn:aws:acm:ap-south-1:515966492403:certificate/747cd873-81bb-42a1-90d1-e34d7a71ee81"
 }
 
 # 6. ALB Listener Rules (path-based routing on port 443)
@@ -566,7 +560,7 @@ resource "aws_lb_listener_rule" "dashboard" {
 
   condition {
     path_pattern {
-      values = ["/dashboard/*"]
+      values = ["/dashboard", "/dashboard/*"]
     }
   }
 }

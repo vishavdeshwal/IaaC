@@ -357,6 +357,23 @@ module "sqs_flush" {
   dlq_arn                    = module.sqs_flush_dlq.queue_arn
 }
 
+module "sqs_email_dlq" {
+  source      = "../../../../modules/aws/sqs"
+  name        = "app-email-dlq"
+  environment = var.environment
+  project     = var.project
+}
+
+module "sqs_email" {
+  source                     = "../../../../modules/aws/sqs"
+  name                       = "app-email-queue"
+  environment                = var.environment
+  project                    = var.project
+  visibility_timeout_seconds = 90
+  max_receive_count          = 3
+  dlq_arn                    = module.sqs_email_dlq.queue_arn
+}
+
 
 // =============================================================
 // Aurora Serverless v2
@@ -494,15 +511,11 @@ module "alb" {
   project     = var.project
 }
 
-# Attach the new SNI certificate for co-create subdomains
-resource "aws_lb_listener_certificate" "co_create_cert" {
-  listener_arn    = module.alb.https_listener_arn
-  certificate_arn = "arn:aws:acm:ap-south-1:515966492403:certificate/747cd873-81bb-42a1-90d1-e34d7a71ee81"
-}
+
 
 # WebSocket paths routed to webchat (priority 5 — must be before webapi)
 resource "aws_lb_listener_rule" "webchat" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 5
 
   action {
@@ -519,7 +532,7 @@ resource "aws_lb_listener_rule" "webchat" {
 
 # General API paths routed to webapi (priority 10)
 resource "aws_lb_listener_rule" "dashboard" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 40
 
   action {
@@ -529,13 +542,13 @@ resource "aws_lb_listener_rule" "dashboard" {
 
   condition {
     path_pattern {
-      values = ["/dashboard/*"]
+      values = ["/dashboard", "/dashboard/*"]
     }
   }
 }
 
 resource "aws_lb_listener_rule" "webapi" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 10
 
   action {
@@ -644,7 +657,7 @@ module "secret_gupshup_numbers" {
 
 
 // =============================================================
-// Locals — env vars and secrets shared across ECS services
+// IAM — Shared assume-role policy + per-service roles & policies
 // =============================================================
 
 locals {
@@ -652,14 +665,16 @@ locals {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect    = "Allow"
-        Principal = { Service = "ecs-tasks.amazonaws.com" }
-        Action    = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
       }
     ]
   })
 
-  // Base env vars — used by all services
+  // Used by ingest and flush workers
   sam_env_vars = [
     { name = "APP_NAME", value = "sammmm" },
     { name = "APP_ENV", value = var.environment },
@@ -711,7 +726,7 @@ locals {
     { name = "SELECTIVE_REASK_ENABLED", value = "false" }
   ]
 
-  // webapi / webchat / dashboard extend the base env vars
+  // webapi / webchat / dashboard add these on top of sam_env_vars
   sam_webapi_env_vars = concat(local.sam_env_vars, [
     { name = "DEEPTAG_TIMEOUT", value = "90s" },
     { name = "DEEPTAG_DISABLED", value = "false" },
@@ -741,6 +756,7 @@ locals {
     { name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn },
     { name = "GOOGLE_API_KEY", valueFrom = module.secret_google_api_key.secret_arn },
     { name = "DEEPTAG_API_KEY", valueFrom = module.secret_deeptag_api_key.secret_arn },
+
   ]
 
   // Secrets for pdf / scan workers
@@ -750,114 +766,180 @@ locals {
     { name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn },
     { name = "GOOGLE_API_KEY", valueFrom = module.secret_google_api_key.secret_arn },
     { name = "DEEPTAG_API_KEY", valueFrom = module.secret_deeptag_api_key.secret_arn },
+
     { name = "EMAIL_SMTP_PASSWORD", valueFrom = module.secret_email_smtp_password.secret_arn },
     { name = "OPENAI_API_KEY", valueFrom = module.secret_openai_api_key.secret_arn },
   ]
 }
 
 
+
 // =============================================================
-// IAM Roles & Policies
+// IAM Roles — per service
 // =============================================================
 
-# Roles previously created internally by module "ecs_fargate".
-# webapi, webchat and dashboard all share these two roles.
-module "webhook_task_exec_role" {
-  source             = "../../../../modules/aws/iam_role"
-  name               = "${var.environment}-${var.project}-sammmm-webhook-task-exec-role"
-  assume_role_policy = local.ecs_task_assume_role_policy
-  policy_arns = [
-    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-  ]
-  environment = var.environment
-  project     = var.project
-}
 
-module "webhook_task_task_role" {
+
+# Per-Service Task Roles
+module "dashboard_task_role" {
   source             = "../../../../modules/aws/iam_role"
-  name               = "${var.environment}-${var.project}-sammmm-webhook-task-task-role"
+  name               = "${var.environment}-${var.project}-dashboard-task-role"
   assume_role_policy = local.ecs_task_assume_role_policy
   policy_arns        = []
   environment        = var.environment
   project            = var.project
 }
 
-# 1. Webhook / WebAPI policy (SQS send + Secrets)
-resource "aws_iam_policy" "webhook_policy" {
-  name        = "${var.environment}-${var.project}-webhook-policy"
-  description = "Permissions for Sammmm webhook service to access SQS and Secrets Manager"
+module "webapi_task_role" {
+  source             = "../../../../modules/aws/iam_role"
+  name               = "${var.environment}-${var.project}-webapi-task-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = []
+  environment        = var.environment
+  project            = var.project
+}
+
+module "webchat_task_role" {
+  source             = "../../../../modules/aws/iam_role"
+  name               = "${var.environment}-${var.project}-webchat-task-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = []
+  environment        = var.environment
+  project            = var.project
+}
+
+resource "aws_iam_policy" "scan_task_policy" {
+  name        = "${var.environment}-${var.project}-scan-task-policy"
+  description = "Permissions for scan task"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["sqs:SendMessage", "sqs:GetQueueAttributes"]
-        Resource = [module.sqs.queue_arn]
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
+        Resource = [module.sqs_scan.queue_arn]
       },
       {
         Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["*"]
+        Action   = ["sqs:SendMessage"]
+        Resource = [module.sqs_flush.queue_arn]
+      },
+      {
+        Sid      = "StageSelfie"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = ["arn:aws:s3:::sammmm-${var.environment}-scan-images/*"]
       }
     ]
   })
 }
 
-module "webhook_role" {
+module "scan_task_role" {
   source             = "../../../../modules/aws/iam_role"
-  name               = "${var.environment}-${var.project}-webhook-role"
+  name               = "${var.environment}-${var.project}-scan-task-role"
   assume_role_policy = local.ecs_task_assume_role_policy
-  policy_arns        = []
+  policy_arns        = [aws_iam_policy.scan_task_policy.arn]
   environment        = var.environment
   project            = var.project
 }
 
-resource "aws_iam_role_policy_attachment" "webhook_attachment" {
-  role       = module.webhook_role.role_name
-  policy_arn = aws_iam_policy.webhook_policy.arn
-}
-
-
-# 3. Flush policy
-resource "aws_iam_policy" "flush_policy" {
-  name        = "${var.environment}-${var.project}-flush-policy"
-  description = "Permissions for Sammmm flush and migrate service to read flush SQS and Secrets Manager"
+resource "aws_iam_policy" "pdf_task_policy" {
+  name        = "${var.environment}-${var.project}-pdf-task-policy"
+  description = "Permissions for pdf task"
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = [
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:SendMessage",
-          "sqs:GetQueueAttributes",
-          "sqs:ChangeMessageVisibility"
-        ]
-        Resource = [
-          module.sqs_delay.queue_arn,
-          module.sqs_scan.queue_arn,
-          module.sqs_render.queue_arn,
-          module.sqs_flush.queue_arn
-        ]
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
+        Resource = [module.sqs_render.queue_arn]
       },
       {
         Effect   = "Allow"
-        Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["*"]
+        Action   = ["sqs:SendMessage"]
+        Resource = [module.sqs_flush.queue_arn]
+      },
+      {
+        Sid      = "WriteReport"
+        Effect   = "Allow"
+        Action   = ["s3:PutObject"]
+        Resource = ["arn:aws:s3:::sammmm-${var.environment}-bucket/*"]
+      },
+      {
+        Sid      = "ReadSelfieForHydration"
+        Effect   = "Allow"
+        Action   = ["s3:GetObject"]
+        Resource = ["arn:aws:s3:::sammmm-${var.environment}-scan-images/*"]
+      }
+    ]
+  })
+}
+
+module "pdf_task_role" {
+  source             = "../../../../modules/aws/iam_role"
+  name               = "${var.environment}-${var.project}-pdf-task-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = [aws_iam_policy.pdf_task_policy.arn]
+  environment        = var.environment
+  project            = var.project
+}
+
+resource "aws_iam_policy" "mailer_task_policy" {
+  name        = "${var.environment}-${var.project}-mailer-task-policy"
+  description = "Permissions for mailer task"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ConsumeEmailQueue"
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
+        Resource = [module.sqs_email.queue_arn]
+      }
+    ]
+  })
+}
+
+module "mailer_task_role" {
+  source             = "../../../../modules/aws/iam_role"
+  name               = "${var.environment}-${var.project}-mailer-task-role"
+  assume_role_policy = local.ecs_task_assume_role_policy
+  policy_arns        = [aws_iam_policy.mailer_task_policy.arn]
+  environment        = var.environment
+  project            = var.project
+}
+
+resource "aws_iam_policy" "flush_task_policy" {
+  name        = "${var.environment}-${var.project}-flush-task-policy"
+  description = "Permissions for flush task"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
+        Resource = [module.sqs_flush.queue_arn]
       },
       {
         Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject"
-        ]
+        Action = ["s3:PutObject", "s3:GetObject"]
         Resource = [
           "arn:aws:s3:::sammmm-${var.environment}-scan-images/*",
           "arn:aws:s3:::sammmm-${var.environment}-bucket/reports/*"
         ]
       },
       {
+        Sid    = "EnqueueScanAndRender"
+        Effect = "Allow"
+        Action = ["sqs:SendMessage", "sqs:GetQueueAttributes"]
+        Resource = [
+          module.sqs_scan.queue_arn,
+          module.sqs_render.queue_arn,
+          module.sqs_email.queue_arn
+        ]
+      },
+      {
+        Sid      = "BedrockInvoke"
         Effect   = "Allow"
         Action   = ["bedrock:InvokeModel"]
         Resource = ["*"]
@@ -866,18 +948,13 @@ resource "aws_iam_policy" "flush_policy" {
   })
 }
 
-module "flush_role" {
+module "flush_task_role" {
   source             = "../../../../modules/aws/iam_role"
-  name               = "${var.environment}-${var.project}-flush-role"
+  name               = "${var.environment}-${var.project}-flush-task-role"
   assume_role_policy = local.ecs_task_assume_role_policy
-  policy_arns        = []
+  policy_arns        = [aws_iam_policy.flush_task_policy.arn]
   environment        = var.environment
   project            = var.project
-}
-
-resource "aws_iam_role_policy_attachment" "flush_attachment" {
-  role       = module.flush_role.role_name
-  policy_arn = aws_iam_policy.flush_policy.arn
 }
 
 # 4. Shared ECS task execution role (used by ingest, flush, pdf, scan)
@@ -901,7 +978,7 @@ resource "aws_iam_policy" "ecs_execution_secrets_policy" {
       {
         Effect   = "Allow"
         Action   = ["secretsmanager:GetSecretValue"]
-        Resource = ["*"]
+        Resource = ["arn:aws:secretsmanager:${var.aws_region}:515966492403:secret:${var.environment}/${var.project}/*"]
       },
       {
         Effect = "Allow"
@@ -921,35 +998,10 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_secrets_attachment" {
   policy_arn = aws_iam_policy.ecs_execution_secrets_policy.arn
 }
 
-# Attach secrets policy to the webhook-task exec role (used by webapi/webchat/dashboard)
-resource "aws_iam_role_policy_attachment" "fargate_execution_secrets" {
-  role       = module.webhook_task_exec_role.role_name
-  policy_arn = aws_iam_policy.ecs_execution_secrets_policy.arn
-}
-
-# Attach webhook SQS + secret permissions to the webhook-task task role
-resource "aws_iam_role_policy_attachment" "fargate_task_webhook" {
-  role       = module.webhook_task_task_role.role_name
-  policy_arn = aws_iam_policy.webhook_policy.arn
-}
-
-
-// =============================================================
-// ECS Cluster
-// =============================================================
-
-module "ecs_cluster" {
-  source       = "../../../../modules/aws/ecs_cluster"
-  cluster_name = "${var.environment}-${var.project}-app-sammmm"
-  environment  = var.environment
-  project      = var.project
-}
-
 
 // =============================================================
 // ECS Services
 // =============================================================
-
 
 # Flush — reads from app-delay-queue
 module "ecs_flush" {
@@ -960,7 +1012,7 @@ module "ecs_flush" {
   cpu                = "256"
   memory             = "512"
   execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.flush_role.role_arn
+  task_role_arn      = module.flush_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
 
@@ -968,8 +1020,10 @@ module "ecs_flush" {
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
-  security_group_ids = [module.app_sg.security_group_id]
-  assign_public_ip   = false
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip = false
 
   container_definitions = jsonencode([
     {
@@ -978,8 +1032,11 @@ module "ecs_flush" {
       essential    = true
       command      = ["flush"]
       portMappings = []
-      environment  = local.sam_env_vars
-      secrets      = local.sam_secrets
+      environment = concat(local.sam_env_vars, [
+        { name = "SQS_EMAIL_URL", value = module.sqs_email.queue_url },
+        { name = "THANKYOU_EMAIL_ENABLED", value = "true" }
+      ])
+      secrets = local.sam_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -997,6 +1054,18 @@ module "ecs_flush" {
 }
 
 # WebAPI — HTTP API server on port 8080, ALB routes /v1/*
+
+// =============================================================
+// ECS Cluster
+// =============================================================
+
+module "ecs_cluster" {
+  source       = "../../../../modules/aws/ecs_cluster"
+  cluster_name = "${var.environment}-${var.project}-app-sammmm"
+  environment  = var.environment
+  project      = var.project
+}
+
 module "ecs_webapi" {
   source             = "../../../../modules/aws/ecs_service"
   service_name       = "${var.environment}-${var.project}-sammmm-webapi"
@@ -1004,8 +1073,8 @@ module "ecs_webapi" {
   cluster_arn        = module.ecs_cluster.cluster_arn
   cpu                = "256"
   memory             = "512"
-  execution_role_arn = module.webhook_task_exec_role.role_arn
-  task_role_arn      = module.webhook_task_task_role.role_arn
+  execution_role_arn = module.ecs_execution_role.role_arn
+  task_role_arn      = module.webapi_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
 
@@ -1013,8 +1082,10 @@ module "ecs_webapi" {
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
-  security_group_ids = [module.app_sg.security_group_id]
-  assign_public_ip   = false
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip = false
 
   target_group_arn = module.target_group_webapi.target_group_arn
   container_name   = "webapi"
@@ -1038,7 +1109,7 @@ module "ecs_webapi" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-sammmm-webapi"
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-webapi"
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "ecs"
           "awslogs-create-group"  = "true"
@@ -1059,8 +1130,8 @@ module "ecs_webchat" {
   cluster_arn        = module.ecs_cluster.cluster_arn
   cpu                = "1024"
   memory             = "2048"
-  execution_role_arn = module.webhook_task_exec_role.role_arn
-  task_role_arn      = module.webhook_task_task_role.role_arn
+  execution_role_arn = module.ecs_execution_role.role_arn
+  task_role_arn      = module.webchat_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
 
@@ -1068,8 +1139,10 @@ module "ecs_webchat" {
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
-  security_group_ids = [module.app_sg.security_group_id]
-  assign_public_ip   = false
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip = false
 
   target_group_arn = module.target_group_webchat.target_group_arn
   container_name   = "webchat"
@@ -1093,7 +1166,7 @@ module "ecs_webchat" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-sammmm-webchat"
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-webchat"
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "webchat"
           "awslogs-create-group"  = "true"
@@ -1114,8 +1187,8 @@ module "ecs_dashboard" {
   cluster_arn        = module.ecs_cluster.cluster_arn
   cpu                = "256"
   memory             = "512"
-  execution_role_arn = module.webhook_task_exec_role.role_arn
-  task_role_arn      = module.webhook_task_task_role.role_arn
+  execution_role_arn = module.ecs_execution_role.role_arn
+  task_role_arn      = module.dashboard_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
 
@@ -1123,8 +1196,10 @@ module "ecs_dashboard" {
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
-  security_group_ids = [module.app_sg.security_group_id]
-  assign_public_ip   = false
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip = false
 
   target_group_arn = module.target_group_dashboard.target_group_arn
   container_name   = "dashboard"
@@ -1148,7 +1223,7 @@ module "ecs_dashboard" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-sammmm-dashboard"
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-dashboard"
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "ecs"
           "awslogs-create-group"  = "true"
@@ -1170,7 +1245,7 @@ module "ecs_pdf" {
   cpu                = "1024"
   memory             = "2048"
   execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.flush_role.role_arn
+  task_role_arn      = module.pdf_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
 
@@ -1178,8 +1253,10 @@ module "ecs_pdf" {
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
-  security_group_ids = [module.app_sg.security_group_id]
-  assign_public_ip   = false
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip = false
 
   container_definitions = jsonencode([
     {
@@ -1206,6 +1283,55 @@ module "ecs_pdf" {
   project     = var.project
 }
 
+# Mailer — background worker for sending completion emails
+module "ecs_mailer" {
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "${var.environment}-${var.project}-sammmm-mailer"
+  family             = "${var.environment}-${var.project}-sammmm-mailer-task"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  cpu                = "256"
+  memory             = "512"
+  execution_role_arn = module.ecs_execution_role.role_arn
+  task_role_arn      = module.mailer_task_role.role_arn
+  desired_count      = 1
+  launch_type        = "FARGATE"
+
+  subnet_ids = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip = false
+
+  container_definitions = jsonencode([
+    {
+      name         = "mailer"
+      image        = "${module.ecr.repository_url}:latest"
+      essential    = true
+      command      = ["mailer"]
+      portMappings = []
+      environment = concat(local.sam_env_vars, [
+        { name = "SQS_EMAIL_URL", value = module.sqs_email.queue_url }
+      ])
+      secrets = local.sam_worker_v2_secrets
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-sammmm-mailer"
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+        }
+      }
+    }
+  ])
+
+  environment = var.environment
+  project     = var.project
+}
+
 # Scan — background worker, image scanning, no ALB
 module "ecs_scan" {
   source             = "../../../../modules/aws/ecs_service"
@@ -1215,7 +1341,7 @@ module "ecs_scan" {
   cpu                = "512"
   memory             = "1024"
   execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.flush_role.role_arn
+  task_role_arn      = module.scan_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
 
@@ -1223,8 +1349,10 @@ module "ecs_scan" {
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
-  security_group_ids = [module.app_sg.security_group_id]
-  assign_public_ip   = false
+  security_group_ids = [
+    module.app_sg.security_group_id
+  ]
+  assign_public_ip = false
 
   container_definitions = jsonencode([
     {
@@ -1250,7 +1378,6 @@ module "ecs_scan" {
   environment = var.environment
   project     = var.project
 }
-
 
 // =============================================================
 // Bastion Host (EC2 + SSM + DB Access)
@@ -1311,7 +1438,7 @@ module "target_group_frontend" {
 }
 
 resource "aws_lb_listener_rule" "frontend" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 50
 
   action {
@@ -1344,8 +1471,8 @@ module "ecs_frontend" {
   cluster_arn        = module.ecs_cluster.cluster_arn
   cpu                = "256"
   memory             = "512"
-  execution_role_arn = module.webhook_task_exec_role.role_arn
-  task_role_arn      = module.webhook_task_task_role.role_arn
+  execution_role_arn = module.ecs_execution_role.role_arn
+  task_role_arn      = null
   desired_count      = 1
   launch_type        = "FARGATE"
 

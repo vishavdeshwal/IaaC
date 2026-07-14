@@ -75,3 +75,9 @@ variable "backend_secrets" {
   description = "Sensitive secrets for the Node backend, to be stored in Secrets Manager"
   default     = {}
 }
+
+variable "saleor_secrets" {
+  type        = map(string)
+  description = "Sensitive secrets for the Saleor app, to be stored in Secrets Manager"
+  default     = {}
+}

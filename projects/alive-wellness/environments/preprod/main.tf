@@ -283,6 +283,14 @@ module "backend_secrets" {
   project       = var.project
 }
 
+module "saleor_secrets" {
+  source        = "../../../../modules/aws/secrets_manager"
+  secret_name   = "${var.environment}-${var.project}-saleor-secrets"
+  secret_string = jsonencode(var.saleor_secrets)
+  environment   = var.environment
+  project       = var.project
+}
+
 module "ecs_execution_secrets_policy" {
   source      = "../../../../modules/aws/iam_policy"
   name        = "${var.environment}-${var.project}-ecs-secrets-policy"
@@ -302,6 +310,7 @@ module "ecs_execution_secrets_policy" {
         ]
         Resource = [
           module.backend_secrets.secret_arn,
+          module.saleor_secrets.secret_arn,
           "arn:aws:logs:${var.aws_region}:*:log-group:/ecs/${var.environment}-${var.project}-*"
         ]
       }
@@ -657,7 +666,7 @@ module "ecs_backend" {
   ]
   target_group_arn = module.target_group_backend.target_group_arn
   container_name   = "backend"
-  container_port   = 8080
+  container_port   = 3000
 
   container_definitions = jsonencode([
     {
@@ -666,8 +675,8 @@ module "ecs_backend" {
       essential = true
       portMappings = [
         {
-          containerPort = 8080
-          hostPort      = 8080
+          containerPort = 3000
+          hostPort      = 3000
           protocol      = "tcp"
         }
       ]
@@ -738,6 +747,7 @@ module "ecs_saleor" {
           "awslogs-group"         = "/ecs/${var.environment}-${var.project}-saleor"
         }
       }
+      secrets = [for k, v in var.saleor_secrets : { name = k, valueFrom = "${module.saleor_secrets.secret_arn}:${k}::" }]
     }
   ])
 }
@@ -777,7 +787,7 @@ module "target_group_saleor" {
   protocol          = "HTTP"
   target_type       = "ip"
   vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
+  health_check_path = "/health/"
   environment       = var.environment
   project           = var.project
 }

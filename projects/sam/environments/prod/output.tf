@@ -43,16 +43,6 @@ output "sqs_delay_queue_arn" {
   description = "ARN of the delay SQS queue"
 }
 
-output "webhook_role_arn" {
-  value       = module.webhook_role.role_arn
-  description = "ARN of the webhook service task IAM role"
-}
-
-
-output "flush_role_arn" {
-  value       = module.flush_role.role_arn
-  description = "ARN of the flush/migrate service task IAM role"
-}
 
 output "ecs_execution_role_arn" {
   value       = module.ecs_execution_role.role_arn
@@ -67,4 +57,14 @@ output "bastion_public_ip" {
 output "bastion_instance_id" {
   value       = module.bastion_host.instance_id
   description = "Instance ID of the EC2 bastion instance"
+}
+
+output "sqs_email_url" {
+  value       = module.sqs_email.queue_url
+  description = "URL of the email SQS queue"
+}
+
+output "sqs_email_dlq_url" {
+  value       = module.sqs_email_dlq.queue_url
+  description = "URL of the email SQS Dead Letter Queue"
 }

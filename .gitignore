@@ -28,3 +28,4 @@ Thumbs.db
 
 # All types of .env
 *.env
+backup_secrets.sh
