@@ -862,10 +862,28 @@ module "webchat_task_role" {
   source             = "../../../../modules/aws/iam_role"
   name               = "${var.environment}-${var.project}-webchat-task-role"
   assume_role_policy = local.ecs_task_assume_role_policy
-  policy_arns        = []
+  policy_arns        = [aws_iam_policy.webchat_task_policy.arn]
   environment        = var.environment
   project            = var.project
 }
+
+resource "aws_iam_policy" "webchat_task_policy" {
+  name        = "${var.environment}-${var.project}-webchat-task-policy"
+  description = "IAM policy for the webchat ECS task"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "EnqueueFlush"
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage", "sqs:GetQueueAttributes"]
+        Resource = [module.sqs_flush.queue_arn]
+      }
+    ]
+  })
+}
+
 
 resource "aws_iam_policy" "scan_task_policy" {
   name        = "${var.environment}-${var.project}-scan-task-policy"
