@@ -634,83 +634,10 @@ module "ecr_frontend" {
 // Secrets Manager
 // =============================================================
 
-module "secret_database_url" {
+module "secret_app_secrets" {
   source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}/${var.project}/DATABASE_URL"
-  secret_string = "postgresql://${var.master_db_user_name}:${var.master_db_user_pass}@${module.aurora.cluster_endpoint}:5432/stg_app_db"
-  environment   = var.environment
-  project       = var.project
-}
-
-module "secret_gupshup_hmac_secret" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}/${var.project}/GUPSHUP_HMAC_SECRET"
-  secret_string = var.secret_gupshup_hmac_secret
-  environment   = var.environment
-  project       = var.project
-}
-
-module "secret_gupshup_token" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}/${var.project}/GUPSHUP_TOKEN"
-  secret_string = var.secret_gupshup_token
-  environment   = var.environment
-  project       = var.project
-}
-
-module "secret_clevertap_passcode" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}/${var.project}/CLEVERTAP_PASSCODE"
-  secret_string = var.secret_clevertap_passcode
-  environment   = var.environment
-  project       = var.project
-}
-
-module "secret_google_api_key" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}/${var.project}/GOOGLE_API_KEY"
-  secret_string = var.secret_google_api_key
-  environment   = var.environment
-  project       = var.project
-}
-
-module "secret_openai_api_key" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}/${var.project}/OPENAI_API_KEY"
-  secret_string = var.secret_openai_api_key
-  environment   = var.environment
-  project       = var.project
-}
-
-module "secret_deeptag_api_key" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}/${var.project}/DEEPTAG_API_KEY"
-  secret_string = var.secret_deeptag_api_key
-  environment   = var.environment
-  project       = var.project
-}
-
-module "secret_email_smtp_password" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}/${var.project}/EMAIL_SMTP_PASSWORD"
-  secret_string = var.secret_email_smtp_password
-  environment   = var.environment
-  project       = var.project
-}
-
-module "secret_gupshup_numbers" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}/${var.project}/GUPSHUP_NUMBERS"
-  secret_string = var.secret_gupshup_numbers
-  environment   = var.environment
-  project       = var.project
-}
-
-
-module "secret_gupshup_sms_password" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}/${var.project}/GUPSHUP_SMS_PASSWORD"
-  secret_string = "dummy-sms-password" # Live value imported out-of-band
+  secret_name   = "${var.environment}/${var.project}/APP_SECRETS"
+  secret_string = "{}"
   environment   = var.environment
   project       = var.project
 }
@@ -801,33 +728,40 @@ locals {
 
   // Secrets for ingest / flush workers
   sam_secrets = [
-    { name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn },
-    { name = "GUPSHUP_HMAC_SECRET", valueFrom = module.secret_gupshup_hmac_secret.secret_arn },
-    { name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn },
-    { name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn }
+    { name = "DATABASE_URL", valueFrom = "${module.secret_app_secrets.secret_arn}:DATABASE_URL::" },
+    { name = "GUPSHUP_HMAC_SECRET", valueFrom = "${module.secret_app_secrets.secret_arn}:GUPSHUP_HMAC_SECRET::" },
+    { name = "GUPSHUP_TOKEN", valueFrom = "${module.secret_app_secrets.secret_arn}:GUPSHUP_TOKEN::" },
+    { name = "CLEVERTAP_PASSCODE", valueFrom = "${module.secret_app_secrets.secret_arn}:CLEVERTAP_PASSCODE::" },
+    { name = "GUPSHUP_SMS_PASSWORD", valueFrom = "${module.secret_app_secrets.secret_arn}:GUPSHUP_SMS_PASSWORD::" },
+    { name = "GUPSHUP_NUMBERS", valueFrom = "${module.secret_app_secrets.secret_arn}:GUPSHUP_NUMBERS::" },
+    { name = "SHOPIFY_TOKEN", valueFrom = "${module.secret_app_secrets.secret_arn}:SHOPIFY_TOKEN::" }
   ]
 
   // Secrets for webapi / webchat / dashboard
   sam_api_secrets = [
-    { name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn },
-    { name = "GUPSHUP_HMAC_SECRET", valueFrom = module.secret_gupshup_hmac_secret.secret_arn },
-    { name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn },
-    { name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn },
-    { name = "GOOGLE_API_KEY", valueFrom = module.secret_google_api_key.secret_arn },
-    { name = "DEEPTAG_API_KEY", valueFrom = module.secret_deeptag_api_key.secret_arn },
-    { name = "GUPSHUP_SMS_PASSWORD", valueFrom = module.secret_gupshup_sms_password.secret_arn },
+    { name = "DATABASE_URL", valueFrom = "${module.secret_app_secrets.secret_arn}:DATABASE_URL::" },
+    { name = "GUPSHUP_HMAC_SECRET", valueFrom = "${module.secret_app_secrets.secret_arn}:GUPSHUP_HMAC_SECRET::" },
+    { name = "GUPSHUP_TOKEN", valueFrom = "${module.secret_app_secrets.secret_arn}:GUPSHUP_TOKEN::" },
+    { name = "CLEVERTAP_PASSCODE", valueFrom = "${module.secret_app_secrets.secret_arn}:CLEVERTAP_PASSCODE::" },
+    { name = "GOOGLE_API_KEY", valueFrom = "${module.secret_app_secrets.secret_arn}:GOOGLE_API_KEY::" },
+    { name = "DEEPTAG_API_KEY", valueFrom = "${module.secret_app_secrets.secret_arn}:DEEPTAG_API_KEY::" },
+    { name = "GUPSHUP_SMS_PASSWORD", valueFrom = "${module.secret_app_secrets.secret_arn}:GUPSHUP_SMS_PASSWORD::" },
+    { name = "GUPSHUP_NUMBERS", valueFrom = "${module.secret_app_secrets.secret_arn}:GUPSHUP_NUMBERS::" },
+    { name = "SHOPIFY_TOKEN", valueFrom = "${module.secret_app_secrets.secret_arn}:SHOPIFY_TOKEN::" }
   ]
 
   // Secrets for pdf / scan workers
   sam_worker_v2_secrets = [
-    { name = "DATABASE_URL", valueFrom = module.secret_database_url.secret_arn },
-    { name = "CLEVERTAP_PASSCODE", valueFrom = module.secret_clevertap_passcode.secret_arn },
-    { name = "GUPSHUP_TOKEN", valueFrom = module.secret_gupshup_token.secret_arn },
-    { name = "GOOGLE_API_KEY", valueFrom = module.secret_google_api_key.secret_arn },
-    { name = "DEEPTAG_API_KEY", valueFrom = module.secret_deeptag_api_key.secret_arn },
-    { name = "GUPSHUP_SMS_PASSWORD", valueFrom = module.secret_gupshup_sms_password.secret_arn },
-    { name = "EMAIL_SMTP_PASSWORD", valueFrom = module.secret_email_smtp_password.secret_arn },
-    { name = "OPENAI_API_KEY", valueFrom = module.secret_openai_api_key.secret_arn },
+    { name = "DATABASE_URL", valueFrom = "${module.secret_app_secrets.secret_arn}:DATABASE_URL::" },
+    { name = "CLEVERTAP_PASSCODE", valueFrom = "${module.secret_app_secrets.secret_arn}:CLEVERTAP_PASSCODE::" },
+    { name = "GUPSHUP_TOKEN", valueFrom = "${module.secret_app_secrets.secret_arn}:GUPSHUP_TOKEN::" },
+    { name = "GOOGLE_API_KEY", valueFrom = "${module.secret_app_secrets.secret_arn}:GOOGLE_API_KEY::" },
+    { name = "DEEPTAG_API_KEY", valueFrom = "${module.secret_app_secrets.secret_arn}:DEEPTAG_API_KEY::" },
+    { name = "EMAIL_SMTP_PASSWORD", valueFrom = "${module.secret_app_secrets.secret_arn}:EMAIL_SMTP_PASSWORD::" },
+    { name = "OPENAI_API_KEY", valueFrom = "${module.secret_app_secrets.secret_arn}:OPENAI_API_KEY::" },
+    { name = "GUPSHUP_SMS_PASSWORD", valueFrom = "${module.secret_app_secrets.secret_arn}:GUPSHUP_SMS_PASSWORD::" },
+    { name = "GUPSHUP_NUMBERS", valueFrom = "${module.secret_app_secrets.secret_arn}:GUPSHUP_NUMBERS::" },
+    { name = "SHOPIFY_TOKEN", valueFrom = "${module.secret_app_secrets.secret_arn}:SHOPIFY_TOKEN::" }
   ]
 }
 
@@ -869,7 +803,6 @@ module "webchat_task_role" {
 
 resource "aws_iam_policy" "webchat_task_policy" {
   name        = "${var.environment}-${var.project}-webchat-task-policy"
-  description = "IAM policy for the webchat ECS task"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -893,7 +826,7 @@ resource "aws_iam_policy" "scan_task_policy" {
     Statement = [
       {
         Effect   = "Allow"
-        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility"]
+        Action   = ["sqs:ReceiveMessage", "sqs:DeleteMessage", "sqs:GetQueueAttributes", "sqs:ChangeMessageVisibility", "sqs:SendMessage"]
         Resource = [module.sqs_scan.queue_arn]
       },
       {
