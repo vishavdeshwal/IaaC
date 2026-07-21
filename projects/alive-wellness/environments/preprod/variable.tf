@@ -81,3 +81,9 @@ variable "saleor_secrets" {
   description = "Sensitive secrets for the Saleor app, to be stored in Secrets Manager"
   default     = {}
 }
+
+variable "saleor_env_vars" {
+  type        = map(string)
+  description = "Unsecure environment variables for the Saleor app"
+  default     = {}
+}

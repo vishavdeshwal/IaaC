@@ -703,11 +703,24 @@ module "ecs_backend" {
     }
   ])
 }
+locals {
+  saleor_container_secrets = [for k, v in var.saleor_secrets : { name = k, valueFrom = "${module.saleor_secrets.secret_arn}:${k}::" }]
+  saleor_container_env = concat(
+    [for k, v in var.saleor_env_vars : { name = k, value = v }],
+    [
+      { name = "CELERY_BROKER_URL", value = "rediss://${module.redis.redis_primary_endpoint}:6379/1?ssl_cert_reqs=required" },
+      { name = "REDIS_URL", value = "rediss://${module.redis.redis_primary_endpoint}:6379/1" },
+      { name = "AWS_MEDIA_BUCKET_NAME", value = aws_s3_bucket.media.bucket },
+      { name = "AWS_STORAGE_BUCKET_NAME", value = aws_s3_bucket.media.bucket },
+      { name = "AWS_S3_REGION_NAME", value = var.aws_region }
+    ]
+  )
+}
 
-module "ecs_saleor" {
+module "ecs_saleor_api" {
   source             = "../../../../modules/aws/ecs_service"
-  service_name       = "${var.environment}-${var.project}-saleor"
-  family             = "${var.environment}-${var.project}-saleor-task"
+  service_name       = "${var.environment}-${var.project}-saleor-api"
+  family             = "${var.environment}-${var.project}-saleor-api-task"
   cluster_arn        = module.ecs_cluster.cluster_arn
   execution_role_arn = module.ecs_execution_role.role_arn
   task_role_arn      = module.ecs_task_role.role_arn
@@ -723,12 +736,12 @@ module "ecs_saleor" {
     module.subnets.private_subnet_ids["app-2"]
   ]
   target_group_arn = module.target_group_saleor.target_group_arn
-  container_name   = "saleor"
+  container_name   = "saleor-api"
   container_port   = 8000
 
   container_definitions = jsonencode([
     {
-      name      = "saleor"
+      name      = "saleor-api"
       image     = "${module.ecr_saleor.repository_url}:latest"
       essential = true
       portMappings = [
@@ -744,10 +757,11 @@ module "ecs_saleor" {
           "awslogs-region"        = var.aws_region
           "awslogs-stream-prefix" = "ecs"
           "awslogs-create-group"  = "true"
-          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-saleor"
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-saleor-api"
         }
       }
-      secrets = [for k, v in var.saleor_secrets : { name = k, valueFrom = "${module.saleor_secrets.secret_arn}:${k}::" }]
+      environment = local.saleor_container_env
+      secrets     = local.saleor_container_secrets
     }
   ])
 }
@@ -836,6 +850,12 @@ resource "aws_lb_listener_rule" "saleor" {
   condition {
     host_header {
       values = ["saleor-preprod.skinverse.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/graphql*", "/media/*", "/plugins/*", "/.well-known/*"]
     }
   }
 }
@@ -927,4 +947,174 @@ resource "aws_lb_listener_rule" "erp" {
       values = ["erp-preprod.skinverse.in"]
     }
   }
+}
+
+// =============================================================
+// Saleor Worker, Beat, and Dashboard
+// =============================================================
+
+module "ecs_saleor_worker" {
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "${var.environment}-${var.project}-saleor-worker"
+  family             = "${var.environment}-${var.project}-saleor-worker-task"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  execution_role_arn = module.ecs_execution_role.role_arn
+  task_role_arn      = module.ecs_task_role.role_arn
+  cpu                = "512"
+  memory             = "1024"
+  launch_type        = "FARGATE"
+  environment        = var.environment
+  project            = var.project
+  desired_count      = 1
+
+  security_group_ids = [module.app_sg.security_group_id]
+  subnet_ids = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+
+  container_definitions = jsonencode([
+    {
+      name      = "saleor-worker"
+      image     = "${module.ecr_saleor.repository_url}:latest"
+      command   = ["celery", "--app", "saleor.celeryconf:app", "worker", "-E", "--loglevel=info"]
+      essential = true
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-saleor-worker"
+        }
+      }
+      environment = local.saleor_container_env
+      secrets     = local.saleor_container_secrets
+    }
+  ])
+}
+
+module "ecs_saleor_beat" {
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "${var.environment}-${var.project}-saleor-beat"
+  family             = "${var.environment}-${var.project}-saleor-beat-task"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  execution_role_arn = module.ecs_execution_role.role_arn
+  task_role_arn      = module.ecs_task_role.role_arn
+  cpu                = "512"
+  memory             = "1024"
+  launch_type        = "FARGATE"
+  environment        = var.environment
+  project            = var.project
+  desired_count      = 1
+
+  deployment_maximum_percent         = 100
+  deployment_minimum_healthy_percent = 0
+  availability_zone_rebalancing      = "DISABLED"
+
+  security_group_ids = [module.app_sg.security_group_id]
+  subnet_ids = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+
+  container_definitions = jsonencode([
+    {
+      name      = "saleor-beat"
+      image     = "${module.ecr_saleor.repository_url}:latest"
+      command   = ["celery", "--app", "saleor.celeryconf:app", "beat", "--scheduler", "saleor.schedulers.schedulers.DatabaseScheduler"]
+      essential = true
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-saleor-beat"
+        }
+      }
+      environment = local.saleor_container_env
+      secrets     = local.saleor_container_secrets
+    }
+  ])
+}
+
+module "target_group_saleor_dashboard" {
+  source               = "../../../../modules/aws/target_group"
+  name                 = "saledash"
+  name_override        = "preprod-saledash-tg"
+  port                 = 80
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/"
+  environment          = var.environment
+  project              = var.project
+}
+
+resource "aws_lb_listener_rule" "saleor_dashboard" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 25
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_saleor_dashboard.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["saleor-preprod.skinverse.in"]
+    }
+  }
+}
+
+module "ecs_saleor_dashboard" {
+  source             = "../../../../modules/aws/ecs_service"
+  service_name       = "${var.environment}-${var.project}-saleor-dashboard"
+  family             = "${var.environment}-${var.project}-saleor-dashboard-task"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  execution_role_arn = module.ecs_execution_role.role_arn
+  task_role_arn      = module.ecs_task_role.role_arn
+  cpu                = "256"
+  memory             = "512"
+  launch_type        = "FARGATE"
+  environment        = var.environment
+  project            = var.project
+  desired_count      = 1
+
+  security_group_ids = [module.app_sg.security_group_id]
+  subnet_ids = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  target_group_arn = module.target_group_saleor_dashboard.target_group_arn
+  container_name   = "saleor-dashboard"
+  container_port   = 80
+
+  container_definitions = jsonencode([
+    {
+      name      = "saleor-dashboard"
+      image     = "ghcr.io/saleor/saleor-dashboard:3.23"
+      essential = true
+      portMappings = [
+        {
+          containerPort = 80
+          hostPort      = 80
+          protocol      = "tcp"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-saleor-dashboard"
+        }
+      }
+      environment = [
+        { name = "API_URL", value = "https://saleor-preprod.skinverse.in/graphql/" }
+      ]
+    }
+  ])
 }
