@@ -648,6 +648,7 @@ module "ecs_frontend" {
 
 module "ecs_backend" {
   source             = "../../../../modules/aws/ecs_service"
+  platform_version   = "1.4.0"
   service_name       = "${var.environment}-${var.project}-backend"
   family             = "${var.environment}-${var.project}-backend-task"
   cluster_arn        = module.ecs_cluster.cluster_arn
@@ -717,8 +718,70 @@ locals {
   )
 }
 
-module "ecs_saleor_api" {
+module "ecs_backend_worker" {
   source             = "../../../../modules/aws/ecs_service"
+  platform_version   = "1.4.0"
+  service_name       = "${var.environment}-${var.project}-backend-worker"
+  family             = "${var.environment}-${var.project}-backend-worker-task"
+  cluster_arn        = module.ecs_cluster.cluster_arn
+  execution_role_arn = module.ecs_execution_role.role_arn
+  task_role_arn      = module.ecs_task_role.role_arn
+  cpu                = "512"
+  memory             = "1024"
+  launch_type        = "FARGATE"
+  environment        = var.environment
+  project            = var.project
+
+  security_group_ids = [module.app_sg.security_group_id]
+  subnet_ids = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+  target_group_arn = module.target_group_backend_worker.target_group_arn
+  container_name   = "backend-worker"
+  container_port   = 3000
+
+  container_definitions = jsonencode([
+    {
+      name      = "backend-worker"
+      image     = "544433947816.dkr.ecr.ap-south-1.amazonaws.com/preprod-alive-wellness-alive-wellness-backend:v-25-07-2003"
+      command   = ["node", "dist/worker.js"]
+      essential = true
+      portMappings = [
+        {
+          containerPort = 3000
+          hostPort      = 3000
+          protocol      = "tcp"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-backend-worker"
+        }
+      }
+      environment = concat(
+        [for k, v in var.backend_env_vars : { name = k, value = v }],
+        [
+          { name = "DB_HOST", value = module.rds_postgres.address },
+          { name = "DB_PORT", value = tostring(module.rds_postgres.port) },
+          { name = "REDIS_HOST", value = module.redis.redis_primary_endpoint },
+          { name = "REDIS_PORT", value = tostring(module.redis.redis_port) },
+          { name = "ERP_WEBHOOK_URL", value = module.sqs.queue_url }
+        ]
+      )
+      secrets = [for k, v in var.backend_secrets : { name = k, valueFrom = "${module.backend_secrets.secret_arn}:${k}::" }]
+    }
+  ])
+}
+
+
+module "ecs_saleor_api" {
+  source                 = "../../../../modules/aws/ecs_service"
+  enable_execute_command = true
   service_name       = "${var.environment}-${var.project}-saleor-api"
   family             = "${var.environment}-${var.project}-saleor-api-task"
   cluster_arn        = module.ecs_cluster.cluster_arn
@@ -794,6 +857,18 @@ module "target_group_backend" {
   project           = var.project
 }
 
+module "target_group_backend_worker" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "bework"
+  port              = 3000
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
 module "target_group_saleor" {
   source            = "../../../../modules/aws/target_group"
   name              = "sale"
@@ -838,6 +913,22 @@ resource "aws_lb_listener_rule" "backend" {
   }
 }
 
+resource "aws_lb_listener_rule" "backend_worker" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 12
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_backend_worker.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["worker-preprod.skinverse.in"]
+    }
+  }
+}
+
 resource "aws_lb_listener_rule" "saleor" {
   listener_arn = module.alb.https_listener_arn
   priority     = 20
@@ -855,7 +946,7 @@ resource "aws_lb_listener_rule" "saleor" {
 
   condition {
     path_pattern {
-      values = ["/graphql*", "/media/*", "/plugins/*", "/.well-known/*"]
+      values = ["/graphql*", "/thumbnail/*", "/plugins/*", "/.well-known/*"]
     }
   }
 }
@@ -955,6 +1046,7 @@ resource "aws_lb_listener_rule" "erp" {
 
 module "ecs_saleor_worker" {
   source             = "../../../../modules/aws/ecs_service"
+  platform_version   = "1.4.0"
   service_name       = "${var.environment}-${var.project}-saleor-worker"
   family             = "${var.environment}-${var.project}-saleor-worker-task"
   cluster_arn        = module.ecs_cluster.cluster_arn
