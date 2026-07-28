@@ -241,6 +241,25 @@ module "aca_app" {
   }
 }
 
+
+module "aca_worker" {
+  source                       = "../../../../modules/azure/container_app"
+  name                         = "prod-mydesignation-worker"
+  container_app_environment_id = module.aca_env.id
+  resource_group_name          = data.azurerm_resource_group.this.name
+  revision_mode                = "Single"
+
+  containers = [
+    {
+      name    = "worker"
+      image   = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+      cpu     = 0.5
+      memory  = "1Gi"
+      command = ["node", "dist/worker.js"]
+    }
+  ]
+}
+
 // =============================================================
 // 4. Database & Cache
 // =============================================================

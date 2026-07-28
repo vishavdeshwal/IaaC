@@ -18,10 +18,11 @@ resource "azurerm_container_app" "this" {
     dynamic "container" {
       for_each = var.containers
       content {
-        name   = container.value.name
-        image  = container.value.image
-        cpu    = container.value.cpu
-        memory = container.value.memory
+        name    = container.value.name
+        image   = container.value.image
+        cpu     = container.value.cpu
+        memory  = container.value.memory
+        command = container.value.command
       }
     }
   }

@@ -37,10 +37,11 @@ variable "max_replicas" {
 
 variable "containers" {
   type = list(object({
-    name   = string
-    image  = string
-    cpu    = number
-    memory = string
+    name    = string
+    image   = string
+    cpu     = number
+    memory  = string
+    command = optional(list(string))
   }))
   description = "List of containers to run."
 }
