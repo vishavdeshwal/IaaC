@@ -46,3 +46,14 @@ output "key_vault_uri" {
   value       = module.key_vault.vault_uri
   description = "The URI of the Key Vault"
 }
+
+output "db_admin_username" {
+  value       = var.db_admin_username
+  description = "PostgreSQL Admin Username"
+}
+
+output "db_admin_password" {
+  value       = var.db_admin_password
+  description = "PostgreSQL Admin Password"
+  sensitive   = true
+}

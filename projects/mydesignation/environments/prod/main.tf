@@ -21,6 +21,8 @@ provider "azurerm" {
   subscription_id = var.subscription_id
 }
 
+data "azurerm_client_config" "current" {}
+
 // =============================================================
 // 1. Resource Group (Using Existing Dev RG due to permissions)
 // =============================================================
@@ -415,4 +417,11 @@ module "kv_role_assignment" {
   scope                = module.key_vault.id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = module.aca_app.identity_principal_id
+}
+
+module "kv_admin_role_assignment" {
+  source               = "../../../../modules/azure/role_assignment"
+  scope                = module.key_vault.id
+  role_definition_name = "Key Vault Administrator"
+  principal_id         = data.azurerm_client_config.current.object_id
 }
