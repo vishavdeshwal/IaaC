@@ -47,7 +47,7 @@ resource "azurerm_container_app" "this" {
 
   lifecycle {
     ignore_changes = [
-      template[0].container,
+      template,
       secret,
       registry,
       workload_profile_name

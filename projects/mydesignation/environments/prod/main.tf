@@ -228,7 +228,7 @@ module "aca_app" {
   ingress = {
     allow_insecure_connections = false
     external_enabled           = true
-    target_port                = 80
+    target_port                = 3001
     traffic_weight = {
       percentage      = 100
       latest_revision = true
