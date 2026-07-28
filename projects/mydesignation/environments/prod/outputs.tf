@@ -57,3 +57,13 @@ output "db_admin_password" {
   description = "PostgreSQL Admin Password"
   sensitive   = true
 }
+
+output "storage_account_name" {
+  value       = module.storage.name
+  description = "The name of the Storage Account"
+}
+
+output "blob_container_name" {
+  value       = keys(module.storage.containers)[0]
+  description = "The name of the Blob Container"
+}
