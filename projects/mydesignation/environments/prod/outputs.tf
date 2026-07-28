@@ -40,3 +40,9 @@ output "container_app_url" {
   value       = module.aca_app.ingress_fqdn
   description = "Container App FQDN (URL)"
 }
+
+
+output "key_vault_uri" {
+  value       = module.key_vault.vault_uri
+  description = "The URI of the Key Vault"
+}

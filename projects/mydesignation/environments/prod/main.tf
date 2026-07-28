@@ -391,3 +391,28 @@ module "acr" {
     Project     = var.project
   }
 }
+
+
+// =============================================================
+// 9. Key Vault (Secret Manager)
+// =============================================================
+
+module "key_vault" {
+  source              = "../../../../modules/azure/key_vault"
+  name                = "prodmydkv12345" # Must be globally unique, 3-24 chars
+  location            = var.location
+  resource_group_name = data.azurerm_resource_group.this.name
+  sku_name            = "standard"
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+module "kv_role_assignment" {
+  source               = "../../../../modules/azure/role_assignment"
+  scope                = module.key_vault.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = module.aca_app.identity_principal_id
+}
