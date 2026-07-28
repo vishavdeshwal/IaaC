@@ -1,0 +1,42 @@
+# Add outputs here as modules are added to prod (see environments/staging/output.tf).
+output "acr_login_server" {
+  value       = module.acr.login_server
+  description = "ACR Login Server URL"
+}
+
+output "acr_admin_username" {
+  value       = module.acr.admin_username
+  description = "ACR Admin Username"
+}
+
+output "acr_admin_password" {
+  value       = module.acr.admin_password
+  description = "ACR Admin Password"
+  sensitive   = true
+}
+
+output "db_fqdn" {
+  value       = module.db.fqdn
+  description = "PostgreSQL Flexible Server FQDN"
+}
+
+output "redis_name" {
+  value       = module.cache.name
+  description = "Redis Cache Name"
+}
+
+output "redis_primary_access_key" {
+  value       = module.cache.primary_access_key
+  description = "Redis Cache Primary Access Key"
+  sensitive   = true
+}
+
+output "servicebus_endpoint" {
+  value       = module.servicebus_namespace.endpoint
+  description = "Service Bus Namespace Endpoint"
+}
+
+output "container_app_url" {
+  value       = module.aca_app.ingress_fqdn
+  description = "Container App FQDN (URL)"
+}
