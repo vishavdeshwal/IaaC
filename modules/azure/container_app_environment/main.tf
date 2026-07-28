@@ -6,4 +6,10 @@ resource "azurerm_container_app_environment" "this" {
   internal_load_balancer_enabled = var.internal_load_balancer_enabled
   
   tags = var.tags
+
+  lifecycle {
+    ignore_changes = [
+      workload_profile
+    ]
+  }
 }

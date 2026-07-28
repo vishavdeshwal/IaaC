@@ -44,4 +44,13 @@ resource "azurerm_container_app" "this" {
   }
   
   tags = var.tags
+
+  lifecycle {
+    ignore_changes = [
+      template[0].container,
+      secret,
+      registry,
+      workload_profile_name
+    ]
+  }
 }

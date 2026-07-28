@@ -64,6 +64,6 @@ output "storage_account_name" {
 }
 
 output "blob_container_name" {
-  value       = keys(module.storage.containers)[0]
+  value       = "prod-mydesignation-bucket"
   description = "The name of the Blob Container"
 }
