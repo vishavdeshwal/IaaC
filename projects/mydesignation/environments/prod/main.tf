@@ -451,3 +451,17 @@ module "storage_admin_role_assignment" {
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = data.azurerm_client_config.current.object_id
 }
+
+module "worker_role_assignment" {
+  source               = "../../../../modules/azure/role_assignment"
+  scope                = module.storage.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = module.aca_worker.identity_principal_id
+}
+
+module "worker_kv_role_assignment" {
+  source               = "../../../../modules/azure/role_assignment"
+  scope                = module.key_vault.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = module.aca_worker.identity_principal_id
+}
