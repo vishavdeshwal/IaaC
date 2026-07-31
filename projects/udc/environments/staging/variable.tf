@@ -57,17 +57,7 @@ variable "frontend_secrets" {
   type        = map(string)
 }
 
-variable "docdb_master_username" {
-  type        = string
-  description = "Master username for DocumentDB"
-  default     = "udcadmin"
-}
 
-variable "docdb_master_password" {
-  type        = string
-  description = "Master password for DocumentDB"
-  sensitive   = true
-}
 
 variable "ses_email_address" {
   description = "The email address to verify for SES"

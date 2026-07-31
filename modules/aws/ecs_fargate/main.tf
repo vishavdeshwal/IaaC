@@ -1,22 +1,3 @@
-# -------
-# ECS Cluster
-# -------
-
-resource "aws_ecs_cluster" "fargate" {
-  name = "${var.environment}-${var.project}-${var.cluster_name}"
-
-  setting {
-    name  = "containerInsights"
-    value = var.enable_container_insights ? "enabled" : "disabled"
-  }
-
-  tags = {
-    Name        = "${var.environment}-${var.project}-${var.cluster_name}"
-    Environment = var.environment
-    Project     = var.project
-  }
-}
-
 
 # -------
 # IAM — Task Execution Role (pulls images, writes logs)
@@ -99,7 +80,7 @@ resource "aws_ecs_task_definition" "fargate" {
 
 resource "aws_ecs_service" "fargate" {
   name            = "${var.environment}-${var.project}-${var.service_name}"
-  cluster         = aws_ecs_cluster.fargate.id
+  cluster         = var.cluster_id
   task_definition = aws_ecs_task_definition.fargate.arn
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
@@ -121,7 +102,7 @@ resource "aws_ecs_service" "fargate" {
 
   # Ignore task definition changes during deployments (common CI/CD pattern)
   lifecycle {
-    ignore_changes = [desired_count, task_definition]
+    ignore_changes = [desired_count]
   }
 
   tags = {

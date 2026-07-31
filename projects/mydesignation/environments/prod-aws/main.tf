@@ -76,7 +76,7 @@ module "route_tables" {
 
 module "sg_bastion" {
   source      = "../../../../modules/aws/security_groups"
-  name        = "${var.project}-${var.environment}-bastion-sg"
+  name        = "bastion"
   description = "Security group for Bastion Host"
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
@@ -94,9 +94,37 @@ module "sg_bastion" {
   ]
 }
 
+module "sg_alb" {
+  source      = "../../../../modules/aws/security_groups"
+  name        = "alb"
+  description = "Security group for Public ALB"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow HTTP from internet"
+    }
+  ]
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound"
+    }
+  ]
+}
+
 module "sg_ecs" {
   source      = "../../../../modules/aws/security_groups"
-  name        = "${var.project}-${var.environment}-ecs-sg"
+  name        = "ecs"
   description = "Security group for ECS Fargate Tasks"
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
@@ -104,11 +132,11 @@ module "sg_ecs" {
 
   ingress_rules = [
     {
-      from_port   = 3001
-      to_port     = 3001
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-      description = "Allow API traffic"
+      from_port       = 3002
+      to_port         = 3002
+      protocol        = "tcp"
+      security_groups = [module.sg_alb.security_group_id]
+      description     = "Allow API traffic from ALB"
     }
   ]
   egress_rules = [
@@ -124,7 +152,7 @@ module "sg_ecs" {
 
 module "sg_db" {
   source      = "../../../../modules/aws/security_groups"
-  name        = "${var.project}-${var.environment}-db-sg"
+  name        = "db"
   description = "Security group for RDS PostgreSQL"
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
@@ -152,7 +180,7 @@ module "sg_db" {
 
 module "sg_redis" {
   source      = "../../../../modules/aws/security_groups"
-  name        = "${var.project}-${var.environment}-redis-sg"
+  name        = "redis"
   description = "Security group for ElastiCache Redis"
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
@@ -209,7 +237,7 @@ resource "aws_iam_instance_profile" "bastion" {
 
 module "bastion" {
   source                 = "../../../../modules/aws/ec2"
-  name                   = "${var.project}-${var.environment}-bastion"
+  name                   = "bastion"
   ami_id                 = "ami-0a0f1259dd1c90938"
   instance_type          = "t3.micro"
   subnet_id              = values(module.subnets.private_subnet_ids)[0]
@@ -219,20 +247,60 @@ module "bastion" {
   project                = var.project
 }
 
+// =============================================================
+// Load Balancing
+// =============================================================
+
+module "tg_api" {
+  source      = "../../../../modules/aws/target_group"
+  name        = "api-v2"
+  port        = 3002
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = module.vpc.vpc_id
+  
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
+module "alb" {
+  source                = "../../../../modules/aws/alb"
+  name                  = "app"
+  internal              = false
+  security_group_ids    = [module.sg_alb.security_group_id]
+  subnet_ids            = values(module.subnets.public_subnet_ids)
+  
+  http_default_action   = "forward"
+  http_target_group_arn = module.tg_api.target_group_arn
+  
+  environment = var.environment
+  project     = var.project
+}
+
+// =============================================================
+// ECS Fargate (API & Worker)
+// =============================================================
+
 module "ecs_cluster" {
   source       = "../../../../modules/aws/ecs_cluster"
-  cluster_name = "${var.project}-${var.environment}-ecs-cluster"
+  cluster_name = "${var.project}-${var.environment}-app"
   environment  = var.environment
   project      = var.project
 }
 
 module "ecs_fargate_api" {
   source             = "../../../../modules/aws/ecs_fargate"
-  service_name       = "${var.project}-${var.environment}-api"
-  cluster_name       = module.ecs_cluster.cluster_name
-  task_family        = "${var.project}-${var.environment}-api-task"
+  service_name       = "api"
+  cluster_id         = module.ecs_cluster.cluster_id
+  task_family        = "api-task"
   subnet_ids         = values(module.subnets.private_subnet_ids)
   security_group_ids = [module.sg_ecs.security_group_id]
+  
+  target_group_arn   = module.tg_api.target_group_arn
+  container_name     = "api"
+  container_port     = 3002
+  
   environment        = var.environment
   project            = var.project
   
@@ -241,13 +309,13 @@ module "ecs_fargate_api" {
   container_definitions = jsonencode([
     {
       name      = "api"
-      image     = "amazon/amazon-ecs-sample"
+      image     = "${module.ecr.repository_url}:latest"
       cpu       = 512
       memory    = 1024
       essential = true
       portMappings = [
         {
-          containerPort = 3001
+          containerPort = 3002
         }
       ]
     }
@@ -256,11 +324,12 @@ module "ecs_fargate_api" {
 
 module "ecs_fargate_worker" {
   source             = "../../../../modules/aws/ecs_fargate"
-  service_name       = "${var.project}-${var.environment}-worker"
-  cluster_name       = module.ecs_cluster.cluster_name
-  task_family        = "${var.project}-${var.environment}-worker-task"
+  service_name       = "worker"
+  cluster_id         = module.ecs_cluster.cluster_id
+  task_family        = "worker-task"
   subnet_ids         = values(module.subnets.private_subnet_ids)
   security_group_ids = [module.sg_ecs.security_group_id]
+  
   environment        = var.environment
   project            = var.project
   
@@ -269,7 +338,7 @@ module "ecs_fargate_worker" {
   container_definitions = jsonencode([
     {
       name      = "worker"
-      image     = "amazon/amazon-ecs-sample"
+      image     = "${module.ecr.repository_url}:latest"
       cpu       = 512
       memory    = 1024
       essential = true
@@ -316,14 +385,14 @@ module "elasticache" {
 
 module "sqs_dlq" {
   source      = "../../../../modules/aws/sqs"
-  name        = "${var.project}-${var.environment}-dlq"
+  name        = "dlq"
   environment = var.environment
   project     = var.project
 }
 
 module "sqs_main" {
   source            = "../../../../modules/aws/sqs"
-  name              = "${var.project}-${var.environment}-queue"
+  name              = "queue"
   environment       = var.environment
   project           = var.project
   dlq_arn           = module.sqs_dlq.queue_arn
@@ -336,7 +405,7 @@ module "sqs_main" {
 
 module "ecr" {
   source      = "../../../../modules/aws/ecr"
-  name        = "${var.project}-${var.environment}-repo"
+  name        = "backend"
   environment = var.environment
   project     = var.project
 }

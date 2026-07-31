@@ -196,33 +196,6 @@ module "app_sg" {
   ]
 }
 
-module "docdb_sg" {
-  source      = "../../../../modules/aws/security_groups"
-  name        = "docdb-sg"
-  vpc_id      = module.vpc.vpc_id
-  environment = var.environment
-  project     = var.project
-
-  ingress_rules = [
-    {
-      from_port       = 27017
-      to_port         = 27017
-      protocol        = "tcp"
-      security_groups = [module.app_sg.security_group_id]
-      description     = "Allow MongoDB traffic from ECS tasks"
-    }
-  ]
-
-  egress_rules = [
-    {
-      from_port   = 0
-      to_port     = 0
-      protocol    = "-1"
-      cidr_blocks = ["0.0.0.0/0"]
-      description = "Allow all outbound"
-    }
-  ]
-}
 
 
 # 3. LOAD BALANCING (ALB, Target Groups, Listeners)
@@ -952,7 +925,8 @@ module "backend_secrets" {
   secret_string = jsonencode(merge(
     var.backend_secrets,
     {
-      "MONGO_DB_INSTANCE" = "mongodb://${var.docdb_master_username}:${var.docdb_master_password}@${module.documentdb.endpoint}:27017/udc-be-v8?retryWrites=false&tls=true&tlsInsecure=true"
+      "MONGO_DB_INSTANCE"  = "mongodb://${module.mongodb_ec2.private_ip}:27017/udc-be-v8"
+      "TRUEDESK_MONGO_URI" = "mongodb://${module.mongodb_ec2.private_ip}:27017/truedesk"
     }
   ))
   recovery_window_in_days = 0 # 0 for staging, can be changed for prod
@@ -974,18 +948,6 @@ module "frontend_secrets" {
 # 12. DOCUMENTDB CLUSTER
 # ==============================================================================
 
-module "documentdb" {
-  source                 = "../../../../modules/aws/documentdb"
-  cluster_identifier     = "${var.environment}-${var.project}-docdb"
-  master_username        = var.docdb_master_username
-  master_password        = var.docdb_master_password
-  instance_class         = "db.t3.medium"
-  instance_count         = 1
-  subnet_ids             = values(module.subnets.private_subnet_ids)
-  vpc_security_group_ids = [module.docdb_sg.security_group_id]
-  environment            = var.environment
-  project                = var.project
-}
 # ==============================================================================
 # 13. CLOUDWATCH LOG GROUPS
 # ==============================================================================
@@ -1063,6 +1025,8 @@ module "bastion_ec2" {
   name                = "bastion"
   ami_id              = data.aws_ami.ubuntu.id
   instance_type       = "t3.micro"
+  root_volume_size    = 50
+  root_volume_type    = "gp3"
   subnet_id           = module.subnets.public_subnet_ids["public-1"]
   security_group_ids  = [module.bastion_sg.security_group_id]
   associate_public_ip = true

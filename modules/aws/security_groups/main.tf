@@ -35,6 +35,10 @@ resource "aws_security_group" "security_group" {
     }
   }
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   tags = {
     Name = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}-sg"
   }
