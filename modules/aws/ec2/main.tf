@@ -17,13 +17,19 @@ resource "aws_instance" "ec2" {
     encrypted             = var.root_volume_encrypted
   }
 
-  tags = {
+  tags = merge({
     Name        = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}"
     Environment = var.environment
     Project     = var.project
-  }
+  }, var.additional_tags)
+
+  volume_tags = merge({
+    Name        = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}"
+    Environment = var.environment
+    Project     = var.project
+  }, var.additional_tags)
 
   lifecycle {
-    ignore_changes = [ami]
+    ignore_changes = [ami, user_data]
   }
 }

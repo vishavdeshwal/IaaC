@@ -1025,3 +1025,217 @@ module "log_group_instructor_web" {
   name   = "/ecs/${var.environment}-${var.project}-udc-instructor-web"
   tags   = { Environment = var.environment, Project = var.project }
 }
+
+# ==============================================================================
+# 9. BASTION HOST & MONGODB (EC2)
+# ==============================================================================
+
+# --- Bastion Host ---
+module "bastion_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  name        = "bastion-sg"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow SSH from anywhere"
+    }
+  ]
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound"
+    }
+  ]
+}
+
+module "bastion_ec2" {
+  source              = "../../../../modules/aws/ec2"
+  name                = "bastion"
+  ami_id              = data.aws_ami.ubuntu.id
+  instance_type       = "t3.micro"
+  subnet_id           = module.subnets.public_subnet_ids["public-1"]
+  security_group_ids  = [module.bastion_sg.security_group_id]
+  associate_public_ip = true
+  environment         = var.environment
+  project             = var.project
+}
+
+resource "aws_eip" "bastion_eip" {
+  instance = module.bastion_ec2.instance_id
+  domain   = "vpc"
+
+  tags = {
+    Name        = "${var.environment}-${var.project}-bastion-eip"
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+# --- MongoDB EC2 ---
+module "mongodb_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  name        = "mongodb-ec2-sg"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 27017
+      to_port         = 27017
+      protocol        = "tcp"
+      security_groups = [module.app_sg.security_group_id]
+      description     = "Allow MongoDB from backend tasks"
+    },
+    {
+      from_port       = 22
+      to_port         = 22
+      protocol        = "tcp"
+      security_groups = [module.bastion_sg.security_group_id]
+      description     = "Allow SSH from Bastion"
+    }
+  ]
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound"
+    }
+  ]
+}
+
+resource "aws_iam_role" "mongodb_role" {
+  name = "${var.environment}-${var.project}-mongodb-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action    = "sts:AssumeRole"
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "mongodb_ssm_policy" {
+  role       = aws_iam_role.mongodb_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "mongodb_profile" {
+  name = "${var.environment}-${var.project}-mongodb-profile"
+  role = aws_iam_role.mongodb_role.name
+}
+
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+module "mongodb_ec2" {
+  source               = "../../../../modules/aws/ec2"
+  name                 = "mongodb"
+  ami_id               = data.aws_ami.ubuntu.id
+  instance_type        = "t3.medium"
+  subnet_id            = module.subnets.private_subnet_ids["db-1"]
+  security_group_ids   = [module.mongodb_sg.security_group_id]
+  iam_instance_profile = aws_iam_instance_profile.mongodb_profile.name
+  associate_public_ip  = false
+  root_volume_size     = 100
+  root_volume_type     = "gp3"
+  environment          = var.environment
+  project              = var.project
+  additional_tags = {
+    Backup = "true"
+  }
+
+  user_data = base64encode(<<-EOF
+    #!/bin/bash
+    apt-get update
+    apt-get install -y gnupg curl
+    curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | \
+       gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg \
+       --dearmor
+    echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+    apt-get update
+    apt-get install -y mongodb-org
+    # By default mongod binds to 127.0.0.1. We need to allow all connections.
+    sed -i 's/bindIp: 127.0.0.1/bindIp: 0.0.0.0/' /etc/mongod.conf
+    systemctl enable mongod
+    systemctl start mongod
+    EOF
+  )
+}
+
+# --- DLM Backup Policy ---
+resource "aws_iam_role" "dlm_lifecycle_role" {
+  name = "${var.environment}-${var.project}-dlm-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "dlm.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "dlm_lifecycle_policy" {
+  role       = aws_iam_role.dlm_lifecycle_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSDataLifecycleManagerServiceRole"
+}
+
+resource "aws_dlm_lifecycle_policy" "mongodb_backup" {
+  description        = "Daily backup for MongoDB EBS volumes"
+  execution_role_arn = aws_iam_role.dlm_lifecycle_role.arn
+  state              = "ENABLED"
+
+  policy_details {
+    resource_types = ["VOLUME"]
+    target_tags = {
+      Backup = "true"
+    }
+
+    schedule {
+      name = "Daily Snapshots"
+      create_rule {
+        interval      = 24
+        interval_unit = "HOURS"
+        times         = ["23:45"]
+      }
+      retain_rule {
+        count = 7
+      }
+      tags_to_add = {
+        SnapshotCreator = "DLM"
+      }
+      copy_tags = true
+    }
+  }
+}

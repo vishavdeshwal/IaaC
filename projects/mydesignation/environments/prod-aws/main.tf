@@ -202,6 +202,11 @@ module "iam_role_bastion" {
   project     = var.project
 }
 
+resource "aws_iam_instance_profile" "bastion" {
+  name = "${var.project}-${var.environment}-bastion-profile"
+  role = module.iam_role_bastion.role_name
+}
+
 module "bastion" {
   source                 = "../../../../modules/aws/ec2"
   name                   = "${var.project}-${var.environment}-bastion"
@@ -209,7 +214,7 @@ module "bastion" {
   instance_type          = "t3.micro"
   subnet_id              = values(module.subnets.private_subnet_ids)[0]
   security_group_ids     = [module.sg_bastion.security_group_id]
-  iam_instance_profile   = module.iam_role_bastion.role_name
+  iam_instance_profile   = aws_iam_instance_profile.bastion.name
   environment            = var.environment
   project                = var.project
 }
@@ -278,9 +283,9 @@ module "ecs_fargate_worker" {
 
 module "rds" {
   source                 = "../../../../modules/aws/rds"
-  identifier             = "${var.project}-${var.environment}-pg"
+  identifier             = "pg"
   engine                 = "postgres"
-  engine_version         = "15.4"
+  engine_version         = "15.13"
   instance_class         = "db.t3.medium"
   allocated_storage      = 128
   username               = var.db_admin_username

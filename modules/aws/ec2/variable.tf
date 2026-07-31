@@ -91,3 +91,9 @@ variable "name_override" {
   default     = null
   description = "Override the default Name tag"
 }
+
+variable "additional_tags" {
+  type        = map(string)
+  default     = {}
+  description = "Additional tags for the instance and its volumes"
+}
