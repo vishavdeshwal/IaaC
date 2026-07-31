@@ -1084,7 +1084,6 @@ module "ecs_webapi" {
       portMappings = [
         {
           containerPort = 8080
-          hostPort      = 8080
           protocol      = "tcp"
         }
       ]
@@ -1141,7 +1140,6 @@ module "ecs_webchat" {
       portMappings = [
         {
           containerPort = 8080
-          hostPort      = 8080
           protocol      = "tcp"
         }
       ]
@@ -1198,7 +1196,6 @@ module "ecs_dashboard" {
       portMappings = [
         {
           containerPort = 8091
-          hostPort      = 8091
           protocol      = "tcp"
         }
       ]
@@ -1448,7 +1445,6 @@ module "ecs_frontend" {
       portMappings = [
         {
           containerPort = 3000
-          hostPort      = 3000
           protocol      = "tcp"
         }
       ]

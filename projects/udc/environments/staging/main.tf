@@ -171,6 +171,17 @@ module "app_sg" {
       protocol        = "tcp"
       security_groups = [module.alb_sg.security_group_id]
       description     = "Allow HTTP from ALB to instructor-web"
+    },
+    # ECS bridge networking assigns dynamic host ports (hostPort omitted in the
+    # container definitions), so the ALB reaches tasks on an ephemeral port
+    # rather than the fixed service ports above. Without this the health check
+    # cannot reach the task and ECS kills it.
+    {
+      from_port       = 32768
+      to_port         = 65535
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "ALB to ECS dynamic host ports"
     }
   ]
 
@@ -234,12 +245,15 @@ module "alb" {
 # --- Target Groups ---
 
 module "tg_be" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "be"
-  port              = 8080
-  vpc_id            = module.vpc.vpc_id
-  target_type       = "instance"
-  health_check_path = "/api/be/health"
+  source      = "../../../../modules/aws/target_group"
+  name        = "be"
+  port        = 8080
+  vpc_id      = module.vpc.vpc_id
+  target_type = "instance"
+  # The Go app registers GET /health at the root (cmd/server.go), not under the
+  # /api/be prefix — the ALB listener rule strips nothing, and health checks go
+  # straight to the task port, bypassing listener rules entirely.
+  health_check_path = "/health"
   environment       = var.environment
   project           = var.project
 }
@@ -564,7 +578,6 @@ module "ecs_svc_be" {
       portMappings = [
         {
           containerPort = 8080
-          hostPort      = 8080
         }
       ]
       environment = [
@@ -629,7 +642,6 @@ module "ecs_svc_truedesk" {
       portMappings = [
         {
           containerPort = 8081
-          hostPort      = 8081
         }
       ]
       logConfiguration = {
@@ -667,7 +679,6 @@ module "ecs_svc_master_web" {
       portMappings = [
         {
           containerPort = 3000
-          hostPort      = 3000
         }
       ]
       environment = [
@@ -714,7 +725,6 @@ module "ecs_svc_master_admin" {
       portMappings = [
         {
           containerPort = 3001
-          hostPort      = 3001
         }
       ]
       environment = [
@@ -766,7 +776,6 @@ module "ecs_svc_student_web" {
       portMappings = [
         {
           containerPort = 3002
-          hostPort      = 3002
         }
       ]
       environment = [
@@ -817,7 +826,6 @@ module "ecs_svc_instructor_web" {
       portMappings = [
         {
           containerPort = 3003
-          hostPort      = 3003
         }
       ]
       environment = [

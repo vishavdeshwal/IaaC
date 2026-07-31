@@ -1015,7 +1015,6 @@ module "ecs_backend_service" {
     essential = true
     portMappings = [{
       containerPort = 8000
-      hostPort      = 8000
     }]
     environmentFiles = [{
       value = "arn:aws:s3:::${var.environment}-${lower(var.project)}-v3-uploads/backend-env/backend.env"

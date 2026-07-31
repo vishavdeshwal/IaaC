@@ -635,7 +635,6 @@ module "ecs_frontend" {
       portMappings = [
         {
           containerPort = 3000
-          hostPort      = 3000
           protocol      = "tcp"
         }
       ]
@@ -683,7 +682,6 @@ module "ecs_backend" {
       portMappings = [
         {
           containerPort = 3000
-          hostPort      = 3000
           protocol      = "tcp"
         }
       ]
@@ -756,7 +754,6 @@ module "ecs_backend_worker" {
       portMappings = [
         {
           containerPort = 3000
-          hostPort      = 3000
           protocol      = "tcp"
         }
       ]
@@ -816,7 +813,6 @@ module "ecs_saleor_api" {
       portMappings = [
         {
           containerPort = 8000
-          hostPort      = 8000
           protocol      = "tcp"
         }
       ]
@@ -1197,7 +1193,6 @@ module "ecs_saleor_dashboard" {
       portMappings = [
         {
           containerPort = 80
-          hostPort      = 80
           protocol      = "tcp"
         }
       ]

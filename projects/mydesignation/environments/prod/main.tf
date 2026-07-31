@@ -133,7 +133,7 @@ resource "azurerm_network_interface_security_group_association" "bastion" {
 # Private DNS Zones for Database and Cache
 module "dns_db" {
   source              = "../../../../modules/azure/private_dns_zone"
-  name                = "privatelink.postgres.database.azure.com"
+  name                = "prod-db.postgres.database.azure.com"
   resource_group_name = data.azurerm_resource_group.this.name
   virtual_network_links = {
     "prod-db-vnet-link" = module.vnet.vnet_id
@@ -146,7 +146,7 @@ module "dns_db" {
 
 module "dns_redis" {
   source              = "../../../../modules/azure/private_dns_zone"
-  name                = "privatelink.redis.cache.windows.net"
+  name                = "privatelink.redis.azure.net"
   resource_group_name = data.azurerm_resource_group.this.name
   virtual_network_links = {
     "prod-redis-vnet-link" = module.vnet.vnet_id
@@ -342,9 +342,16 @@ module "storage" {
   account_replication_type        = "LRS"
   account_kind                    = "StorageV2"
   access_tier                     = "Hot"
-  allow_nested_items_to_be_public = false
+
+  # The backend runs with AZURE_STORAGE_PUBLIC_BLOBS=true and serves asset URLs
+  # directly from blob storage, so anonymous blob-level reads must be permitted.
+  # Matches the staging account (mydesignation/staging-mydesignation-bucket),
+  # which is already allowBlobPublicAccess=true + container access "blob".
+  # "blob" exposes individual blobs only -- it does NOT allow anonymous listing
+  # of the container, which "container" would.
+  allow_nested_items_to_be_public = true
   containers = {
-    "prod-mydesignation-bucket" = { access_type = "private" }
+    "prod-mydesignation-bucket" = { access_type = "blob" }
   }
   queues      = []
   environment = var.environment
