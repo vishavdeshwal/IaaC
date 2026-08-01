@@ -114,3 +114,9 @@ variable "use_name_prefix" {
   description = "If true, omits explicit name to let AWS autogenerate it (useful for recreate replacements)"
 }
 
+
+variable "name_prefix" {
+  type        = string
+  default     = null
+  description = "Max 6 characters. Overrides the default tf- prefix if use_name_prefix is true."
+}

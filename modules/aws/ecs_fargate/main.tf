@@ -22,6 +22,22 @@ resource "aws_iam_role" "execution" {
   }
 }
 
+resource "aws_iam_role_policy" "execution_secrets" {
+  name = "secrets-manager-access"
+  role = aws_iam_role.execution.name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["secretsmanager:GetSecretValue"]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "execution" {
   role       = aws_iam_role.execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
@@ -85,6 +101,14 @@ resource "aws_ecs_service" "fargate" {
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
 
+  # Only meaningful for load-balanced services; ECS rejects it otherwise.
+  health_check_grace_period_seconds = var.target_group_arn != null ? var.health_check_grace_period_seconds : null
+
+  deployment_circuit_breaker {
+    enable   = var.enable_deployment_circuit_breaker
+    rollback = var.enable_deployment_circuit_breaker
+  }
+
   network_configuration {
     subnets          = var.subnet_ids
     security_groups  = var.security_group_ids
@@ -100,9 +124,11 @@ resource "aws_ecs_service" "fargate" {
     }
   }
 
-  # Ignore task definition changes during deployments (common CI/CD pattern)
+  # Ignore task definition changes during deployments (common CI/CD pattern).
+  # The deploy pipeline registers its own revisions; without this, terraform
+  # apply rolls the service back to whatever revision Terraform last created.
   lifecycle {
-    ignore_changes = [desired_count]
+    ignore_changes = [desired_count, task_definition]
   }
 
   tags = {

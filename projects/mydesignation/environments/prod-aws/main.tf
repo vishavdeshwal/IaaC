@@ -1,5 +1,77 @@
+terraform {
+  required_version = ">= 1.5.0"
+
+  backend "s3" {
+    bucket       = "mydesignation-prod-tfstate-ap-south-1"
+    key          = "mydesignation/prod/terraform.tfstate"
+    region       = "ap-south-1"
+    use_lockfile = true
+    encrypt      = true
+    profile      = "mydsn"
+  }
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region  = var.aws_region
+  profile = var.aws_profile
+
+  default_tags {
+    tags = {
+      Environment = var.environment
+      Project     = var.project
+      ManagedBy   = "Terraform"
+    }
+  }
+}
+
 data "aws_availability_zones" "available" {
   state = "available"
+}
+
+locals {
+  app_secret_keys = [
+    "NODE_ENV",
+    "LOG_LEVEL",
+    "QUEUE",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "JWT_SECRET",
+    "CACHE_ADMIN_TOKEN",
+    "SHOPIFY_STORE_DOMAIN",
+    "SHOPIFY_API_VERSION",
+    "SHOPIFY_ADMIN_TOKEN",
+    "SHOPIFY_STOREFRONT_TOKEN",
+    "SHOPIFY_WEBHOOK_SECRET",
+    "RAZORPAY_KEY_ID",
+    "RAZORPAY_KEY_SECRET",
+    "LOGISY_API_KEY",
+    "CLICKPOST_WEBHOOK_TOKEN",
+    "MSG91_AUTH_KEY",
+    "MSG91_OTP_TEMPLATE_ID",
+    "MSG91_EMAIL_TEMPLATE_ID",
+    "SERVICEBUS_QUEUE_NAME",
+    "SERVICEBUS_LISTEN_CONNECTION_STRING",
+  ]
+
+  app_secrets = [
+    for k in local.app_secret_keys : {
+      name      = k
+      valueFrom = "${module.secrets_manager.secret_arn}:${k}::"
+    }
+  ]
+
+  app_image = "${module.ecr.repository_url}:${var.image_tag}"
+  alb_routable_private_subnet_ids = [
+    for idx in range(length(var.public_subnets)) :
+    module.subnets.private_subnet_ids["priv-${idx}"]
+  ]
 }
 
 // =============================================================
@@ -26,21 +98,21 @@ module "igw" {
 module "subnets" {
   source = "../../../../modules/aws/subnets"
   vpc_id = module.vpc.vpc_id
-  
+
   public_subnets = {
     for idx, cidr in var.public_subnets : "pub-${idx}" => {
       cidr     = cidr
       az_index = idx
     }
   }
-  
+
   private_subnets = {
     for idx, cidr in var.private_subnets : "priv-${idx}" => {
       cidr     = cidr
       az_index = idx
     }
   }
-  
+
   environment = var.environment
   project     = var.project
 }
@@ -62,12 +134,14 @@ module "nat_gateway" {
 }
 
 module "route_tables" {
-  source         = "../../../../modules/aws/route_tables"
-  vpc_id         = module.vpc.vpc_id
-  igw_id         = module.igw.igw_id
-  nat_gateway_id = module.nat_gateway.nat_gateway_id
-  environment    = var.environment
-  project        = var.project
+  source             = "../../../../modules/aws/route_tables"
+  vpc_id             = module.vpc.vpc_id
+  igw_id             = module.igw.igw_id
+  nat_gateway_id     = module.nat_gateway.nat_gateway_id
+  public_subnet_ids  = module.subnets.public_subnet_ids
+  private_subnet_ids = module.subnets.private_subnet_ids
+  environment        = var.environment
+  project            = var.project
 }
 
 // =============================================================
@@ -81,9 +155,17 @@ module "sg_bastion" {
   vpc_id      = module.vpc.vpc_id
   environment = var.environment
   project     = var.project
-  
-  ingress_rules = []
-  egress_rules  = [
+
+  ingress_rules = [
+    {
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow HTTP from internet"
+    }
+  ]
+  egress_rules = [
     {
       from_port   = 0
       to_port     = 0
@@ -132,8 +214,8 @@ module "sg_ecs" {
 
   ingress_rules = [
     {
-      from_port       = 3002
-      to_port         = 3002
+      from_port       = 3001
+      to_port         = 3001
       protocol        = "tcp"
       security_groups = [module.sg_alb.security_group_id]
       description     = "Allow API traffic from ALB"
@@ -211,8 +293,8 @@ module "sg_redis" {
 // =============================================================
 
 module "iam_role_bastion" {
-  source      = "../../../../modules/aws/iam_role"
-  name        = "${var.project}-${var.environment}-bastion-role"
+  source = "../../../../modules/aws/iam_role"
+  name   = "${var.project}-${var.environment}-bastion-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -236,15 +318,16 @@ resource "aws_iam_instance_profile" "bastion" {
 }
 
 module "bastion" {
-  source                 = "../../../../modules/aws/ec2"
-  name                   = "bastion"
-  ami_id                 = "ami-0a0f1259dd1c90938"
-  instance_type          = "t3.micro"
-  subnet_id              = values(module.subnets.private_subnet_ids)[0]
-  security_group_ids     = [module.sg_bastion.security_group_id]
-  iam_instance_profile   = aws_iam_instance_profile.bastion.name
-  environment            = var.environment
-  project                = var.project
+  source               = "../../../../modules/aws/ec2"
+  name                 = "bastion"
+  ami_id               = "ami-0a0f1259dd1c90938"
+  instance_type        = "t3.micro"
+  subnet_id            = values(module.subnets.public_subnet_ids)[0]
+  associate_public_ip  = true
+  security_group_ids   = [module.sg_bastion.security_group_id]
+  iam_instance_profile = aws_iam_instance_profile.bastion.name
+  environment          = var.environment
+  project              = var.project
 }
 
 // =============================================================
@@ -253,27 +336,27 @@ module "bastion" {
 
 module "tg_api" {
   source      = "../../../../modules/aws/target_group"
-  name        = "api-v2"
-  port        = 3002
+  name        = "api-v3"
+  port        = 3001
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = module.vpc.vpc_id
-  
+
   health_check_path = "/health"
   environment       = var.environment
   project           = var.project
 }
 
 module "alb" {
-  source                = "../../../../modules/aws/alb"
-  name                  = "app"
-  internal              = false
-  security_group_ids    = [module.sg_alb.security_group_id]
-  subnet_ids            = values(module.subnets.public_subnet_ids)
-  
+  source             = "../../../../modules/aws/alb"
+  name               = "app"
+  internal           = false
+  security_group_ids = [module.sg_alb.security_group_id]
+  subnet_ids         = values(module.subnets.public_subnet_ids)
+
   http_default_action   = "forward"
   http_target_group_arn = module.tg_api.target_group_arn
-  
+
   environment = var.environment
   project     = var.project
 }
@@ -294,30 +377,49 @@ module "ecs_fargate_api" {
   service_name       = "api"
   cluster_id         = module.ecs_cluster.cluster_id
   task_family        = "api-task"
-  subnet_ids         = values(module.subnets.private_subnet_ids)
+  subnet_ids         = local.alb_routable_private_subnet_ids
   security_group_ids = [module.sg_ecs.security_group_id]
-  
-  target_group_arn   = module.tg_api.target_group_arn
-  container_name     = "api"
-  container_port     = 3002
-  
-  environment        = var.environment
-  project            = var.project
-  
-  cpu                = 512
-  memory             = 1024
+
+  target_group_arn = module.tg_api.target_group_arn
+  container_name   = "api"
+  container_port   = 3001
+
+  # App logs "listening" ~10s after start; 60s leaves headroom without
+  # masking a genuinely broken build for long.
+  health_check_grace_period_seconds = 60
+
+  environment = var.environment
+  project     = var.project
+
+  cpu    = 512
+  memory = 1024
   container_definitions = jsonencode([
     {
       name      = "api"
-      image     = "${module.ecr.repository_url}:latest"
+      image     = local.app_image
       cpu       = 512
       memory    = 1024
       essential = true
       portMappings = [
         {
-          containerPort = 3002
+          containerPort = 3001
         }
       ]
+      environment = [
+        {
+          name  = "PORT"
+          value = "3001"
+        }
+      ]
+      secrets = local.app_secrets
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-api"
+          "awslogs-region"        = "ap-south-1"
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
     }
   ])
 }
@@ -329,19 +431,34 @@ module "ecs_fargate_worker" {
   task_family        = "worker-task"
   subnet_ids         = values(module.subnets.private_subnet_ids)
   security_group_ids = [module.sg_ecs.security_group_id]
-  
-  environment        = var.environment
-  project            = var.project
-  
-  cpu                = 512
-  memory             = 1024
+
+  environment = var.environment
+  project     = var.project
+
+  cpu    = 512
+  memory = 1024
   container_definitions = jsonencode([
     {
       name      = "worker"
-      image     = "${module.ecr.repository_url}:latest"
+      image     = local.app_image
       cpu       = 512
       memory    = 1024
       essential = true
+      environment = [
+        {
+          name  = "PORT"
+          value = "3001"
+        }
+      ]
+      secrets = local.app_secrets
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-worker"
+          "awslogs-region"        = "ap-south-1"
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
     }
   ])
 }
@@ -351,32 +468,32 @@ module "ecs_fargate_worker" {
 // =============================================================
 
 module "rds" {
-  source                 = "../../../../modules/aws/rds"
-  identifier             = "pg"
-  engine                 = "postgres"
-  engine_version         = "15.13"
-  instance_class         = "db.t3.medium"
-  allocated_storage      = 128
-  username               = var.db_admin_username
-  password               = var.db_admin_password
-  security_group_ids     = [module.sg_db.security_group_id]
-  subnet_ids             = values(module.subnets.private_subnet_ids)
-  publicly_accessible    = false
-  skip_final_snapshot    = true
-  environment            = var.environment
-  project                = var.project
+  source              = "../../../../modules/aws/rds"
+  identifier          = "pg"
+  engine              = "postgres"
+  engine_version      = "15.13"
+  instance_class      = "db.t3.medium"
+  allocated_storage   = 128
+  username            = var.db_admin_username
+  password            = var.db_admin_password
+  security_group_ids  = [module.sg_db.security_group_id]
+  subnet_ids          = values(module.subnets.private_subnet_ids)
+  publicly_accessible = false
+  skip_final_snapshot = true
+  environment         = var.environment
+  project             = var.project
 }
 
 module "elasticache" {
-  source                 = "../../../../modules/aws/elasticache"
-  name                   = "redis"
-  engine                 = "redis"
-  node_type              = "cache.t3.medium"
-  num_cache_nodes        = 1
-  security_group_ids     = [module.sg_redis.security_group_id]
-  subnet_ids             = values(module.subnets.private_subnet_ids)
-  environment            = var.environment
-  project                = var.project
+  source             = "../../../../modules/aws/elasticache"
+  name               = "redis"
+  engine             = "redis"
+  node_type          = "cache.t3.medium"
+  num_cache_nodes    = 1
+  security_group_ids = [module.sg_redis.security_group_id]
+  subnet_ids         = values(module.subnets.private_subnet_ids)
+  environment        = var.environment
+  project            = var.project
 }
 
 // =============================================================
@@ -428,4 +545,78 @@ module "secrets_manager" {
   secret_name = "${var.project}-${var.environment}-secrets"
   environment = var.environment
   project     = var.project
+}
+
+// =============================================================
+// 8. Application IAM Task Permissions
+// =============================================================
+
+resource "aws_iam_role_policy" "api_task_sqs" {
+  name = "api-sqs-publish"
+  role = module.ecs_fargate_api.task_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:GetQueueUrl",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = [module.sqs_main.queue_arn]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "worker_task_sqs" {
+  name = "worker-sqs-consume"
+  role = module.ecs_fargate_worker.task_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueUrl",
+          "sqs:GetQueueAttributes",
+          "sqs:ChangeMessageVisibility"
+        ]
+        Resource = [
+          module.sqs_main.queue_arn,
+          module.sqs_dlq.queue_arn
+        ]
+      }
+    ]
+  })
+}
+
+// =============================================================
+// 9. CloudWatch Log Groups
+// =============================================================
+
+resource "aws_cloudwatch_log_group" "api_logs" {
+  name              = "/ecs/${var.environment}-${var.project}-api"
+  retention_in_days = 7
+}
+
+resource "aws_cloudwatch_log_group" "worker_logs" {
+  name              = "/ecs/${var.environment}-${var.project}-worker"
+  retention_in_days = 7
+}
+
+resource "aws_eip" "bastion" {
+  instance = module.bastion.instance_id
+  domain   = "vpc"
+
+  tags = {
+    Name        = "${var.environment}-${var.project}-bastion-eip"
+    Environment = var.environment
+    Project     = var.project
+  }
 }

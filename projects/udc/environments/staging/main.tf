@@ -67,12 +67,14 @@ module "nat_gateway" {
 }
 
 module "route_tables" {
-  source         = "../../../../modules/aws/route_tables"
-  vpc_id         = module.vpc.vpc_id
-  igw_id         = module.igw.igw_id
-  nat_gateway_id = module.nat_gateway.nat_gateway_id
-  environment    = var.environment
-  project        = var.project
+  source             = "../../../../modules/aws/route_tables"
+  vpc_id             = module.vpc.vpc_id
+  igw_id             = module.igw.igw_id
+  nat_gateway_id     = module.nat_gateway.nat_gateway_id
+  public_subnet_ids  = module.subnets.public_subnet_ids
+  private_subnet_ids = module.subnets.private_subnet_ids
+  environment        = var.environment
+  project            = var.project
 }
 
 module "route_table_association" {
@@ -138,8 +140,8 @@ module "app_sg" {
       description     = "Allow HTTP from ALB to udc-be"
     },
     {
-      from_port       = 8081
-      to_port         = 8081
+      from_port       = 8118
+      to_port         = 8118
       protocol        = "tcp"
       security_groups = [module.alb_sg.security_group_id]
       description     = "Allow HTTP from ALB to udc-truedesk"
@@ -234,7 +236,7 @@ module "tg_be" {
 module "tg_truedesk" {
   source            = "../../../../modules/aws/target_group"
   name              = "truedesk"
-  port              = 8081
+  port              = 8118
   vpc_id            = module.vpc.vpc_id
   target_type       = "instance"
   health_check_path = "/api/truedesk/health"
@@ -249,8 +251,13 @@ module "tg_master_web" {
   vpc_id            = module.vpc.vpc_id
   target_type       = "instance"
   health_check_path = "/"
-  environment       = var.environment
-  project           = var.project
+  # src/proxy.ts redirects a locale-less path, so GET / legitimately answers 307
+  # (-> /en). The module default matcher of "200" therefore never passes and ECS
+  # killed and replaced the task every ~6 minutes; the site only appeared to work
+  # because an ALB fails open when every target in the group is unhealthy.
+  health_check_matcher = "200-399"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "tg_master_admin" {
@@ -260,8 +267,10 @@ module "tg_master_admin" {
   vpc_id            = module.vpc.vpc_id
   target_type       = "instance"
   health_check_path = "/"
-  environment       = var.environment
-  project           = var.project
+  # Same locale-redirect at / as master-web (src/middleware.ts here).
+  health_check_matcher = "200-399"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "tg_student_web" {
@@ -606,7 +615,7 @@ module "ecs_svc_truedesk" {
   task_role_arn            = module.ecs_task_role.role_arn
   target_group_arn         = module.tg_truedesk.target_group_arn
   container_name           = "udc-truedesk"
-  container_port           = 8081
+  container_port           = 8118
   container_definitions = jsonencode([
     {
       name      = "udc-truedesk"
@@ -614,7 +623,7 @@ module "ecs_svc_truedesk" {
       essential = true
       portMappings = [
         {
-          containerPort = 8081
+          containerPort = 8118
         }
       ]
       logConfiguration = {

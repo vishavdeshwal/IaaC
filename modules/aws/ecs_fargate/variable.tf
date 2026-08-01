@@ -78,6 +78,18 @@ variable "enable_container_insights" {
   description = "Whether to enable CloudWatch Container Insights on the cluster"
 }
 
+variable "health_check_grace_period_seconds" {
+  type        = number
+  default     = null
+  description = "Seconds to ignore ELB health checks after a task starts. Only valid when target_group_arn is set. Prevents the scheduler from killing slow-booting tasks before they can serve /health."
+}
+
+variable "enable_deployment_circuit_breaker" {
+  type        = bool
+  default     = true
+  description = "Abort and roll back a deployment that never reaches a steady state, instead of looping failed tasks indefinitely."
+}
+
 variable "environment" {
   type = string
 }

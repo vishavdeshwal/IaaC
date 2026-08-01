@@ -43,3 +43,8 @@ variable "db_admin_password" {
   type        = string
   sensitive   = true
 }
+
+variable "image_tag" {
+  description = "ECR image tag deployed to the api and worker services. There is no ':latest' tag in this repo, so this must name a real tag or tasks fail with CannotPullContainerError."
+  type        = string
+}
