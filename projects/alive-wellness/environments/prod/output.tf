@@ -34,8 +34,8 @@ output "ecs_cluster_name" {
 }
 
 output "bastion_public_ip" {
-  value       = module.bastion_host.public_ip
-  description = "Public IP of the EC2 bastion instance"
+  value       = module.bastion_eip.public_ip
+  description = "Public IP of the EC2 bastion instance (Elastic IP)"
 }
 
 output "strapi_private_ip" {

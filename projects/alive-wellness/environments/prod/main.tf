@@ -77,20 +77,14 @@ module "nat_gateway" {
 }
 
 module "route_tables" {
-  source         = "../../../../modules/aws/route_tables"
-  vpc_id         = module.vpc.vpc_id
-  igw_id         = module.igw.igw_id
-  nat_gateway_id = module.nat_gateway.nat_gateway_id
-  environment    = var.environment
-  project        = var.project
-}
-
-module "route_table_association" {
-  source                 = "../../../../modules/aws/route_table_association"
-  public_route_table_id  = module.route_tables.public_route_table_id
-  private_route_table_id = module.route_tables.private_route_table_id
-  public_subnet_ids      = module.subnets.public_subnet_ids
-  private_subnet_ids     = module.subnets.private_subnet_ids
+  source             = "../../../../modules/aws/route_tables"
+  vpc_id             = module.vpc.vpc_id
+  igw_id             = module.igw.igw_id
+  nat_gateway_id     = module.nat_gateway.nat_gateway_id
+  environment        = var.environment
+  project            = var.project
+  public_subnet_ids  = module.subnets.public_subnet_ids
+  private_subnet_ids = module.subnets.private_subnet_ids
 }
 
 // =============================================================
@@ -510,7 +504,7 @@ module "rds_postgres" {
   identifier        = "postgres"
   engine            = "postgres"
   engine_version    = "15"
-  instance_class    = "db.t3.medium"
+  instance_class    = "db.r5.large"
   allocated_storage = 200
   username          = var.master_db_user_name
   password          = var.master_db_user_pass
@@ -567,6 +561,15 @@ module "bastion_host" {
   environment          = var.environment
   project              = var.project
 }
+
+module "bastion_eip" {
+  source      = "../../../../modules/aws/eip"
+  name        = "bastion-eip"
+  instance_id = module.bastion_host.instance_id
+  environment = var.environment
+  project     = var.project
+}
+
 
 # Strapi Server
 module "strapi_server" {
