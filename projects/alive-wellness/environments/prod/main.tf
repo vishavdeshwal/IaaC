@@ -509,8 +509,8 @@ module "rds_postgres" {
   username          = var.master_db_user_name
   password          = var.master_db_user_pass
   subnet_ids = [
-    module.subnets.private_subnet_ids["app-1"],
-    module.subnets.private_subnet_ids["app-2"]
+    module.subnets.private_subnet_ids["db-1"],
+    module.subnets.private_subnet_ids["db-2"]
   ]
   security_group_ids = [module.db_sg.security_group_id]
   environment        = var.environment
@@ -525,8 +525,8 @@ module "redis" {
   node_type          = "cache.t3.micro"
   num_cache_clusters = 1
   subnet_ids = [
-    module.subnets.private_subnet_ids["app-1"],
-    module.subnets.private_subnet_ids["app-2"]
+    module.subnets.private_subnet_ids["db-1"],
+    module.subnets.private_subnet_ids["db-2"]
   ]
   security_group_ids = [module.redis_sg.security_group_id]
   environment        = var.environment
