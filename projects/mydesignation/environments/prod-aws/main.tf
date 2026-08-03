@@ -536,6 +536,18 @@ resource "aws_s3_bucket" "app_bucket" {
   }
 }
 
+resource "aws_s3_bucket_cors_configuration" "app_bucket_cors" {
+  bucket = aws_s3_bucket.app_bucket.id
+
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET", "PUT", "POST", "DELETE", "HEAD"]
+    allowed_origins = ["http://${module.alb.alb_dns_name}"]
+    expose_headers  = ["ETag"]
+    max_age_seconds = 3000
+  }
+}
+
 // =============================================================
 // 7. Secrets Manager
 // =============================================================
@@ -566,6 +578,30 @@ resource "aws_iam_role_policy" "api_task_sqs" {
           "sqs:GetQueueAttributes"
         ]
         Resource = [module.sqs_main.queue_arn]
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "api_task_s3" {
+  name = "api-s3-access"
+  role = module.ecs_fargate_api.task_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.app_bucket.arn,
+          "${aws_s3_bucket.app_bucket.arn}/*"
+        ]
       }
     ]
   })
