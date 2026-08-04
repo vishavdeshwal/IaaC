@@ -91,10 +91,10 @@ module "route_tables" {
 // Security
 // =============================================================
 
-module "app_sg" {
+module "alb_sg" {
   source      = "../../../../modules/aws/security_groups"
   vpc_id      = module.vpc.vpc_id
-  name        = "app-sg"
+  name        = "alb-sg"
   environment = var.environment
   project     = var.project
 
@@ -112,41 +112,6 @@ module "app_sg" {
       protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
       description = "Allow HTTPS"
-    },
-    {
-      from_port   = 3000
-      to_port     = 3000
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-      description = "Allow Frontend Port"
-    },
-    {
-      from_port   = 8080
-      to_port     = 8080
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-      description = "Allow Backend Port"
-    },
-    {
-      from_port       = 22
-      to_port         = 22
-      protocol        = "tcp"
-      security_groups = [module.bastion_sg.security_group_id]
-      description     = "Allow SSH strictly from Bastion Host"
-    },
-    {
-      from_port   = 1337
-      to_port     = 1337
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-      description = "Allow Strapi Port"
-    },
-    {
-      from_port   = 8000
-      to_port     = 8000
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-      description = "Allow ERP & Saleor Port"
     }
   ]
 
@@ -161,33 +126,230 @@ module "app_sg" {
   ]
 }
 
-module "db_sg" {
+module "frontend_sg" {
   source      = "../../../../modules/aws/security_groups"
   vpc_id      = module.vpc.vpc_id
-  name        = "db-sg"
+  name        = "frontend-sg"
   environment = var.environment
   project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 3000
+      to_port         = 3000
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow Frontend Port from ALB"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
+module "backend_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "backend-sg"
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 8080
+      to_port         = 8080
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow Backend Port from ALB"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
+module "strapi_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "strapi-sg"
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 1337
+      to_port         = 1337
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow Strapi Port from ALB"
+    },
+    {
+      from_port       = 22
+      to_port         = 22
+      protocol        = "tcp"
+      security_groups = [module.bastion_sg.security_group_id]
+      description     = "Allow SSH from Bastion Host"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
+module "erp_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "erp-sg"
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 8000
+      to_port         = 8000
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow ERP Port from ALB"
+    },
+    {
+      from_port       = 22
+      to_port         = 22
+      protocol        = "tcp"
+      security_groups = [module.bastion_sg.security_group_id]
+      description     = "Allow SSH from Bastion Host"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
+module "saleor_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "saleor-sg"
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 8000
+      to_port         = 8000
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow Saleor API Port from ALB"
+    },
+    {
+      from_port       = 80
+      to_port         = 80
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow Saleor Dashboard Port from ALB"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
+module "postgres_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "postgres-sg"
+  environment = var.environment
+  project     = var.project
+
   ingress_rules = [
     {
       from_port       = 5432
       to_port         = 5432
       protocol        = "tcp"
-      security_groups = [module.app_sg.security_group_id]
-      description     = "Allow DB access from App SG"
+      security_groups = [module.backend_sg.security_group_id]
+      description     = "Allow Postgres access from Backend API/Worker"
+    },
+    {
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = [module.saleor_sg.security_group_id]
+      description     = "Allow Postgres access from Saleor"
+    },
+    {
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = [module.strapi_sg.security_group_id]
+      description     = "Allow Postgres access from Strapi"
     },
     {
       from_port       = 5432
       to_port         = 5432
       protocol        = "tcp"
       security_groups = [module.bastion_sg.security_group_id]
-      description     = "Allow DB access from Bastion Host"
-    },
+      description     = "Allow Postgres access from Bastion Host"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
+module "mariadb_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "mariadb-sg"
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
     {
       from_port       = 3306
       to_port         = 3306
       protocol        = "tcp"
-      security_groups = [module.app_sg.security_group_id]
-      description     = "Allow MariaDB access from App SG (including ERP)"
+      security_groups = [module.erp_sg.security_group_id]
+      description     = "Allow MariaDB access from ERP Server"
     },
     {
       from_port       = 3306
@@ -221,8 +383,22 @@ module "redis_sg" {
       from_port       = 6379
       to_port         = 6379
       protocol        = "tcp"
-      security_groups = [module.app_sg.security_group_id]
-      description     = "Allow Redis access from App SG"
+      security_groups = [module.backend_sg.security_group_id]
+      description     = "Allow Redis access from Backend API/Worker"
+    },
+    {
+      from_port       = 6379
+      to_port         = 6379
+      protocol        = "tcp"
+      security_groups = [module.saleor_sg.security_group_id]
+      description     = "Allow Redis access from Saleor"
+    },
+    {
+      from_port       = 6379
+      to_port         = 6379
+      protocol        = "tcp"
+      security_groups = [module.erp_sg.security_group_id]
+      description     = "Allow Redis access from ERP Server"
     }
   ]
 
@@ -526,7 +702,7 @@ module "rds_postgres" {
     module.subnets.private_subnet_ids["db-1"],
     module.subnets.private_subnet_ids["db-2"]
   ]
-  security_group_ids = [module.db_sg.security_group_id]
+  security_group_ids = [module.postgres_sg.security_group_id]
   environment        = var.environment
   project            = var.project
 }
@@ -563,7 +739,7 @@ module "rds_mariadb" {
     module.subnets.private_subnet_ids["db-1"],
     module.subnets.private_subnet_ids["db-2"]
   ]
-  security_group_ids = [module.db_sg.security_group_id]
+  security_group_ids = [module.mariadb_sg.security_group_id]
   environment        = var.environment
   project            = var.project
 }
@@ -631,7 +807,7 @@ module "strapi_server" {
   instance_type        = "t3.medium"
   ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
   subnet_id            = module.subnets.private_subnet_ids["app-1"]
-  security_group_ids   = [module.app_sg.security_group_id]
+  security_group_ids   = [module.strapi_sg.security_group_id]
   iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
   root_volume_size     = 50
   root_volume_type     = "gp3"
@@ -646,7 +822,7 @@ module "erp_server" {
   instance_type        = "t3.xlarge"
   ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
   subnet_id            = module.subnets.private_subnet_ids["app-2"]
-  security_group_ids   = [module.app_sg.security_group_id]
+  security_group_ids   = [module.erp_sg.security_group_id]
   iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
   root_volume_size     = 100
   root_volume_type     = "gp3"
@@ -674,7 +850,7 @@ module "ecs_frontend" {
   environment        = var.environment
   project            = var.project
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.frontend_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
@@ -721,7 +897,7 @@ module "ecs_backend" {
   environment        = var.environment
   project            = var.project
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.backend_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
@@ -792,7 +968,7 @@ module "ecs_backend_worker" {
   environment        = var.environment
   project            = var.project
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.backend_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
@@ -852,7 +1028,7 @@ module "ecs_saleor_api" {
   environment            = var.environment
   project                = var.project
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.saleor_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
@@ -942,7 +1118,7 @@ module "target_group_saleor" {
 module "alb" {
   source             = "../../../../modules/aws/alb"
   name               = "app"
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.alb_sg.security_group_id]
   subnet_ids = [
     module.subnets.public_subnet_ids["public-1"],
     module.subnets.public_subnet_ids["public-2"]
@@ -1056,7 +1232,7 @@ resource "aws_lb_listener_rule" "frontend" {
 
   condition {
     host_header {
-      values = ["fe.skinverse.in", "www.fe.skinverse.in"]
+      values = ["skinverse.in", "www.skinverse.in"]
     }
   }
 }
@@ -1117,7 +1293,7 @@ module "ecs_saleor_worker" {
   project            = var.project
   desired_count      = 1
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.saleor_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
@@ -1162,7 +1338,7 @@ module "ecs_saleor_beat" {
   deployment_minimum_healthy_percent = 0
   availability_zone_rebalancing      = "DISABLED"
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.saleor_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
@@ -1232,7 +1408,7 @@ module "ecs_saleor_dashboard" {
   project            = var.project
   desired_count      = 1
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.saleor_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
