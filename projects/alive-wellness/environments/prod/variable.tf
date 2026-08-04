@@ -54,6 +54,15 @@ variable "master_db_user_pass" {
   type = string
 }
 
+variable "mariadb_user_name" {
+  type    = string
+  default = "mariadbadmin"
+}
+
+variable "mariadb_user_pass" {
+  type = string
+}
+
 variable "health_check_path" {
   type = string
 }

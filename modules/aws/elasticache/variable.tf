@@ -79,6 +79,12 @@ variable "transit_encryption" {
   description = "Whether to enable in-transit encryption (TLS). Only for Redis."
 }
 
+variable "transit_encryption_mode" {
+  type        = string
+  default     = null
+  description = "Mode for transit encryption ('preferred' or 'required'). Can only be set when transit_encryption_enabled is true."
+}
+
 variable "auth_token" {
   type        = string
   default     = null

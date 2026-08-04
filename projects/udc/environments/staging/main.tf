@@ -210,8 +210,10 @@ module "alb" {
   subnet_ids         = values(module.subnets.public_subnet_ids)
   security_group_ids = [module.alb_sg.security_group_id]
 
-  http_default_action   = "forward"
-  http_target_group_arn = module.tg_master_web.target_group_arn
+  http_default_action = "redirect_to_https"
+
+  certificate_arn        = "arn:aws:acm:ca-central-1:365202716291:certificate/fca73226-4314-4b6a-82b3-8f24b18580d1"
+  https_target_group_arn = module.tg_master_web.target_group_arn
 
   environment = var.environment
   project     = var.project
@@ -298,7 +300,7 @@ module "tg_instructor_web" {
 # --- ALB Listener Rules (Path-Based Routing) ---
 
 resource "aws_lb_listener_rule" "be" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 10
   action {
     type             = "forward"
@@ -312,7 +314,7 @@ resource "aws_lb_listener_rule" "be" {
 }
 
 resource "aws_lb_listener_rule" "truedesk" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 20
   action {
     type             = "forward"
@@ -326,7 +328,7 @@ resource "aws_lb_listener_rule" "truedesk" {
 }
 
 resource "aws_lb_listener_rule" "master_admin" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 30
   action {
     type             = "forward"
@@ -340,7 +342,7 @@ resource "aws_lb_listener_rule" "master_admin" {
 }
 
 resource "aws_lb_listener_rule" "student_web" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 40
   action {
     type             = "forward"
@@ -354,7 +356,7 @@ resource "aws_lb_listener_rule" "student_web" {
 }
 
 resource "aws_lb_listener_rule" "instructor_web" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 50
   action {
     type             = "forward"
@@ -1209,6 +1211,34 @@ resource "aws_dlm_lifecycle_policy" "mongodb_backup" {
         SnapshotCreator = "DLM"
       }
       copy_tags = true
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "truedesk_v1" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 15
+  action {
+    type             = "forward"
+    target_group_arn = module.tg_truedesk.target_group_arn
+  }
+  condition {
+    path_pattern {
+      values = ["/api/v1/*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "truedesk_v2" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 16
+  action {
+    type             = "forward"
+    target_group_arn = module.tg_truedesk.target_group_arn
+  }
+  condition {
+    path_pattern {
+      values = ["/api/v2/*"]
     }
   }
 }

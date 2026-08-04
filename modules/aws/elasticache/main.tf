@@ -34,6 +34,7 @@ resource "aws_elasticache_replication_group" "redis" {
 
   at_rest_encryption_enabled = var.at_rest_encryption
   transit_encryption_enabled = var.transit_encryption
+  transit_encryption_mode    = var.transit_encryption_mode
   auth_token                 = var.transit_encryption ? var.auth_token : null
 
   maintenance_window         = var.maintenance_window

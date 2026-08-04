@@ -52,3 +52,8 @@ output "cloudfront_domain_name" {
   value       = module.cdn.cloudfront_domain_name
   description = "Domain name of the CloudFront CDN"
 }
+
+output "mariadb_endpoint" {
+  value       = module.rds_mariadb.endpoint
+  description = "Endpoint of the RDS MariaDB instance"
+}

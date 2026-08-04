@@ -38,3 +38,41 @@ output "subnet_group_name" {
   value       = aws_db_subnet_group.rds.name
   description = "Name of the RDS DB subnet group"
 }
+
+# --- Aliases and additional outputs for compatibility ---
+
+output "db_instance_address" {
+  value       = aws_db_instance.rds.address
+  description = "Hostname of the RDS instance"
+}
+
+output "db_instance_endpoint" {
+  value       = aws_db_instance.rds.endpoint
+  description = "Connection endpoint (host:port)"
+}
+
+output "db_instance_port" {
+  value       = aws_db_instance.rds.port
+  description = "Port the RDS instance is listening on"
+}
+
+output "db_instance_identifier" {
+  value       = aws_db_instance.rds.identifier
+  description = "Identifier of the RDS instance"
+}
+
+output "db_instance_arn" {
+  value       = aws_db_instance.rds.arn
+  description = "ARN of the RDS instance"
+}
+
+output "db_subnet_group_name" {
+  value       = aws_db_subnet_group.rds.name
+  description = "Name of the RDS DB subnet group"
+}
+
+output "db_instance_master_user_secret_arn" {
+  value       = try(aws_db_instance.rds.master_user_secret[0].secret_arn, null)
+  description = "ARN of the master user secret created in Secrets Manager when manage_master_user_password = true"
+}
+

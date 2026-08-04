@@ -191,6 +191,13 @@ module "sg_alb" {
       protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
       description = "Allow HTTP from internet"
+    },
+    {
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow HTTPS from internet"
     }
   ]
   egress_rules = [
@@ -354,8 +361,8 @@ module "alb" {
   security_group_ids = [module.sg_alb.security_group_id]
   subnet_ids         = values(module.subnets.public_subnet_ids)
 
-  http_default_action   = "forward"
-  http_target_group_arn = module.tg_api.target_group_arn
+  certificate_arn        = "arn:aws:acm:ap-south-1:658132201265:certificate/47fc48e6-c9e5-4b27-890a-7939256f97bb"
+  https_target_group_arn = module.tg_api.target_group_arn
 
   environment = var.environment
   project     = var.project
@@ -471,7 +478,7 @@ module "rds" {
   source              = "../../../../modules/aws/rds"
   identifier          = "pg"
   engine              = "postgres"
-  engine_version      = "15.13"
+  engine_version      = "15.17"
   instance_class      = "db.t3.medium"
   allocated_storage   = 128
   username            = var.db_admin_username
