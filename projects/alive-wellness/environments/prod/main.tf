@@ -233,6 +233,13 @@ module "erp_sg" {
       description     = "Allow ERP Port from ALB"
     },
     {
+      from_port       = 80
+      to_port         = 80
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow ERP Direct Port 8000 from ALB"
+    },
+    {
       from_port       = 22
       to_port         = 22
       protocol        = "tcp"
