@@ -137,6 +137,13 @@ module "ec2_sg" {
       description = "Allow HTTP traffic"
     },
     {
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow HTTP traffic"
+    },
+    {
       from_port   = 443
       to_port     = 443
       protocol    = "tcp"
