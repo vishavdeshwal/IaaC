@@ -31,6 +31,8 @@ data "aws_ssm_parameter" "ubuntu_ami" {
   name = "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
 }
 
+data "aws_elb_service_account" "main" {}
+
 // =============================================================
 // Network
 // =============================================================
@@ -163,8 +165,8 @@ module "backend_sg" {
 
   ingress_rules = [
     {
-      from_port       = 8080
-      to_port         = 8080
+      from_port       = 3000
+      to_port         = 3000
       protocol        = "tcp"
       security_groups = [module.alb_sg.security_group_id]
       description     = "Allow Backend Port from ALB"
@@ -667,6 +669,79 @@ resource "aws_s3_bucket_policy" "cdn_access" {
   })
 }
 
+resource "aws_s3_bucket" "alb_logs" {
+  bucket        = "${var.project}-${var.environment}-alb-logs-ap-south-1"
+  force_destroy = true
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project
+    Purpose     = "ALB Access Logs"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  bucket                  = aws_s3_bucket.alb_logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  rule {
+    id     = "expire-logs"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = 90
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main.arn
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs.arn
+      }
+    ]
+  })
+}
+
 module "ecr_frontend" {
   source       = "../../../../modules/aws/ecr"
   name         = "alive-wellness-frontend"
@@ -1134,8 +1209,11 @@ module "alb" {
   https_target_group_arn = module.target_group_frontend.target_group_arn
   http_default_action    = "redirect_to_https"
   http_target_group_arn  = module.target_group_frontend.target_group_arn
+  access_logs_bucket     = aws_s3_bucket.alb_logs.id
   environment            = var.environment
   project                = var.project
+
+  depends_on = [aws_s3_bucket_policy.alb_logs]
 }
 
 resource "aws_lb_listener_rule" "backend" {

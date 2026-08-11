@@ -35,6 +35,8 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_elb_service_account" "main" {}
+
 locals {
   app_secret_keys = [
     "NODE_ENV",
@@ -354,6 +356,77 @@ module "tg_api" {
   project           = var.project
 }
 
+resource "aws_s3_bucket" "alb_logs" {
+  bucket        = "${var.project}-${var.environment}-alb-logs-ap-south-1"
+  force_destroy = true
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project
+    Purpose     = "ALB Access Logs"
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  bucket                  = aws_s3_bucket.alb_logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  rule {
+    id     = "expire-logs"
+    status = "Enabled"
+
+    expiration {
+      days = 90
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main.arn
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.alb_logs.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.alb_logs.arn
+      }
+    ]
+  })
+}
+
 module "alb" {
   source             = "../../../../modules/aws/alb"
   name               = "app"
@@ -364,9 +437,14 @@ module "alb" {
   certificate_arn        = "arn:aws:acm:ap-south-1:658132201265:certificate/47fc48e6-c9e5-4b27-890a-7939256f97bb"
   https_target_group_arn = module.tg_api.target_group_arn
 
+  access_logs_bucket = aws_s3_bucket.alb_logs.id
+
   environment = var.environment
   project     = var.project
+
+  depends_on = [aws_s3_bucket_policy.alb_logs]
 }
+
 
 // =============================================================
 // ECS Fargate (API & Worker)

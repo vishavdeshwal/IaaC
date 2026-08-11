@@ -37,3 +37,9 @@ output "bastion_public_ip_eip" {
   value       = aws_eip.bastion.public_ip
   description = "The Elastic IP address of the Bastion Host"
 }
+
+output "alb_logs_bucket_name" {
+  description = "The S3 bucket name for ALB access logs"
+  value       = aws_s3_bucket.alb_logs.id
+}
+
