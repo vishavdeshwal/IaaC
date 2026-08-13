@@ -583,6 +583,28 @@ resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "ecs_secretsmanager_execution_policy" {
+  name = "${var.environment}-${var.project}-ecs-secretsmanager-exec-policy"
+  role = module.ecs_execution_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          module.saleor_secrets.secret_arn,
+          module.backend_secrets.secret_arn
+        ]
+      }
+    ]
+  })
+}
+
 module "ecs_task_role" {
   source = "../../../../modules/aws/iam_role"
   name   = "${var.environment}-${var.project}-ecs-task-role"
@@ -600,6 +622,28 @@ module "ecs_task_role" {
   })
   environment = var.environment
   project     = var.project
+}
+
+resource "aws_iam_role_policy" "ecs_secretsmanager_task_policy" {
+  name = "${var.environment}-${var.project}-ecs-secretsmanager-task-policy"
+  role = module.ecs_task_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          module.saleor_secrets.secret_arn,
+          module.backend_secrets.secret_arn
+        ]
+      }
+    ]
+  })
 }
 
 # ----------- Public S3 Media Bucket for Saleor & Strapi -----------
@@ -966,30 +1010,4 @@ module "saleor_secrets" {
   secret_string = jsonencode(var.saleor_secrets)
   environment   = var.environment
   project       = var.project
-}
-
-module "db_secrets" {
-  source      = "../../../../modules/aws/secrets_manager"
-  secret_name = "${var.environment}-${var.project}-db-secrets"
-  secret_string = jsonencode({
-    username = var.master_db_user_name
-    password = var.master_db_user_pass
-    database = "fixxlydb"
-    port     = 3306
-  })
-  environment = var.environment
-  project     = var.project
-}
-
-module "postgres_db_secrets" {
-  source      = "../../../../modules/aws/secrets_manager"
-  secret_name = "${var.environment}-${var.project}-postgres-db-secrets"
-  secret_string = jsonencode({
-    username = var.postgres_master_user_name
-    password = var.postgres_master_user_pass
-    database = "fixxlypostgres"
-    port     = 5432
-  })
-  environment = var.environment
-  project     = var.project
 }

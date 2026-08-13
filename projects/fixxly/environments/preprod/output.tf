@@ -73,11 +73,6 @@ output "saleor_secrets_arn" {
   description = "ARN of the Saleor Secrets Manager secret"
 }
 
-output "postgres_db_secrets_arn" {
-  value       = module.postgres_db_secrets.secret_arn
-  description = "ARN of the PostgreSQL database Secrets Manager secret"
-}
-
 output "s3_media_bucket_name" {
   value       = module.s3_media.bucket_name
   description = "Name of the Public S3 Media Bucket for Saleor and Strapi"
