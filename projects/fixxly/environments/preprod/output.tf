@@ -73,6 +73,11 @@ output "saleor_secrets_arn" {
   description = "ARN of the Saleor Secrets Manager secret"
 }
 
+output "strapi_secrets_arn" {
+  value       = module.strapi_secrets.secret_arn
+  description = "ARN of the Strapi Secrets Manager secret"
+}
+
 output "s3_media_bucket_name" {
   value       = module.s3_media.bucket_name
   description = "Name of the Public S3 Media Bucket for Saleor and Strapi"

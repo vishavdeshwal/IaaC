@@ -138,6 +138,12 @@ variable "saleor_secrets" {
   default     = {}
 }
 
+variable "strapi_secrets" {
+  type        = map(string)
+  description = "Sensitive secrets stored in Secrets Manager for Strapi CMS"
+  default     = {}
+}
+
 variable "ec2_key_name" {
   type        = string
   description = "EC2 Key Pair name for SSH access"

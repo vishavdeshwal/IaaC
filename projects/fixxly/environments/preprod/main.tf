@@ -599,7 +599,8 @@ resource "aws_iam_role_policy" "ecs_secretsmanager_execution_policy" {
         ]
         Resource = [
           module.saleor_secrets.secret_arn,
-          module.backend_secrets.secret_arn
+          module.backend_secrets.secret_arn,
+          module.strapi_secrets.secret_arn
         ]
       }
     ]
@@ -640,7 +641,8 @@ resource "aws_iam_role_policy" "ecs_secretsmanager_task_policy" {
         ]
         Resource = [
           module.saleor_secrets.secret_arn,
-          module.backend_secrets.secret_arn
+          module.backend_secrets.secret_arn,
+          module.strapi_secrets.secret_arn
         ]
       }
     ]
@@ -1012,6 +1014,14 @@ module "saleor_secrets" {
   source        = "../../../../modules/aws/secrets_manager"
   secret_name   = "${var.environment}-${var.project}-saleor-secrets"
   secret_string = jsonencode(var.saleor_secrets)
+  environment   = var.environment
+  project       = var.project
+}
+
+module "strapi_secrets" {
+  source        = "../../../../modules/aws/secrets_manager"
+  secret_name   = "${var.environment}-${var.project}-strapi-secrets"
+  secret_string = jsonencode(var.strapi_secrets)
   environment   = var.environment
   project       = var.project
 }
