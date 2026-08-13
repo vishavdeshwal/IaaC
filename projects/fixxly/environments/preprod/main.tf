@@ -409,19 +409,51 @@ resource "aws_lb_listener_rule" "saleor_dashboard_rule" {
 // SECTION 2: COMPUTE (Bastion Host, ERP Server, ECR, ECS Cluster & Microservices)
 // =============================================================
 
+# ----------- IAM Role & Instance Profile for EC2 SSM Access -----------
+
+module "ec2_ssm_role" {
+  source = "../../../../modules/aws/iam_role"
+  name   = "${var.environment}-${var.project}-ec2-ssm-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+  environment = var.environment
+  project     = var.project
+}
+
+resource "aws_iam_role_policy_attachment" "ec2_ssm_policy" {
+  role       = module.ec2_ssm_role.role_name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ssm_profile" {
+  name = "${var.environment}-${var.project}-ssm-profile"
+  role = module.ec2_ssm_role.role_name
+}
+
 # ----------- Bastion Host -----------
 
 module "bastion_host" {
-  source              = "../../../../modules/aws/ec2"
-  name                = "bastion"
-  ami_id              = data.aws_ssm_parameter.ubuntu_ami.value
-  instance_type       = "t3.micro"
-  subnet_id           = module.subnets.public_subnet_ids["public-1"]
-  security_group_ids  = [module.bastion_sg.security_group_id]
-  key_name            = var.ec2_key_name != "" ? var.ec2_key_name : null
-  associate_public_ip = true
-  root_volume_size    = 20
-  root_volume_type    = "gp3"
+  source               = "../../../../modules/aws/ec2"
+  name                 = "bastion"
+  ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
+  instance_type        = "t3.micro"
+  subnet_id            = module.subnets.public_subnet_ids["public-1"]
+  security_group_ids   = [module.bastion_sg.security_group_id]
+  key_name             = var.ec2_key_name != "" ? var.ec2_key_name : null
+  iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
+  associate_public_ip  = true
+  root_volume_size     = 20
+  root_volume_type     = "gp3"
 
   environment = var.environment
   project     = var.project
@@ -430,16 +462,17 @@ module "bastion_host" {
 # ----------- ERP Server (Private Subnet) -----------
 
 module "erp_server" {
-  source              = "../../../../modules/aws/ec2"
-  name                = "erp"
-  ami_id              = data.aws_ssm_parameter.ubuntu_ami.value
-  instance_type       = "t3.medium"
-  subnet_id           = module.subnets.private_subnet_ids["app-1"]
-  security_group_ids  = [module.app_sg.security_group_id]
-  key_name            = var.ec2_key_name != "" ? var.ec2_key_name : null
-  associate_public_ip = false
-  root_volume_size    = 50
-  root_volume_type    = "gp3"
+  source               = "../../../../modules/aws/ec2"
+  name                 = "erp"
+  ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
+  instance_type        = "t3.medium"
+  subnet_id            = module.subnets.private_subnet_ids["app-1"]
+  security_group_ids   = [module.app_sg.security_group_id]
+  key_name             = var.ec2_key_name != "" ? var.ec2_key_name : null
+  iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
+  associate_public_ip  = false
+  root_volume_size     = 50
+  root_volume_type     = "gp3"
 
   environment = var.environment
   project     = var.project
@@ -791,7 +824,7 @@ module "rds_mariadb" {
 
 module "rds_postgres" {
   source             = "../../../../modules/aws/rds"
-  identifier         = "postgres"
+  identifier         = "saleor-strapi"
   engine             = "postgres"
   engine_version     = var.postgres_engine_version
   instance_class     = "db.m5.large"
