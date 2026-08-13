@@ -315,21 +315,22 @@ module "strapi_target_group" {
   protocol          = "HTTP"
   target_type       = "ip"
   vpc_id            = module.vpc.vpc_id
-  health_check_path = var.health_check_path
+  health_check_path = "/health"
   environment       = var.environment
   project           = var.project
 }
 
 module "saleor_target_group" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "saleor"
-  port              = 8000
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = var.health_check_path
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "saleor"
+  port                 = 8000
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health/"
+  health_check_matcher = "200-399"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_saleor_dashboard" {
@@ -700,14 +701,15 @@ locals {
 
 # 1. Saleor API Service
 module "ecs_saleor_api" {
-  source                 = "../../../../modules/aws/ecs_service"
-  enable_execute_command = true
-  service_name           = "${var.environment}-${var.project}-saleor-api"
-  family                 = "${var.environment}-${var.project}-saleor-api-task"
-  cluster_arn            = module.ecs_cluster.cluster_arn
-  execution_role_arn     = module.ecs_execution_role.role_arn
-  task_role_arn          = module.ecs_task_role.role_arn
-  cpu                    = "512"
+  source                            = "../../../../modules/aws/ecs_service"
+  enable_execute_command            = true
+  service_name                      = "${var.environment}-${var.project}-saleor-api"
+  family                            = "${var.environment}-${var.project}-saleor-api-task"
+  cluster_arn                       = module.ecs_cluster.cluster_arn
+  execution_role_arn                = module.ecs_execution_role.role_arn
+  task_role_arn                     = module.ecs_task_role.role_arn
+  health_check_grace_period_seconds = 300
+  cpu                               = "512"
   memory                 = "1024"
   launch_type            = "FARGATE"
   environment            = var.environment
@@ -839,18 +841,19 @@ module "ecs_saleor_beat" {
 
 # 4. Saleor Dashboard Service
 module "ecs_saleor_dashboard" {
-  source             = "../../../../modules/aws/ecs_service"
-  service_name       = "${var.environment}-${var.project}-saleor-dashboard"
-  family             = "${var.environment}-${var.project}-saleor-dashboard-task"
-  cluster_arn        = module.ecs_cluster.cluster_arn
-  execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.ecs_task_role.role_arn
-  cpu                = "256"
-  memory             = "512"
-  launch_type        = "FARGATE"
-  environment        = var.environment
-  project            = var.project
-  desired_count      = 1
+  source                            = "../../../../modules/aws/ecs_service"
+  service_name                      = "${var.environment}-${var.project}-saleor-dashboard"
+  family                            = "${var.environment}-${var.project}-saleor-dashboard-task"
+  cluster_arn                       = module.ecs_cluster.cluster_arn
+  execution_role_arn                = module.ecs_execution_role.role_arn
+  task_role_arn                     = module.ecs_task_role.role_arn
+  health_check_grace_period_seconds = 300
+  cpu                               = "256"
+  memory                            = "512"
+  launch_type                       = "FARGATE"
+  environment                       = var.environment
+  project                           = var.project
+  desired_count                     = 1
 
   security_group_ids = [module.app_sg.security_group_id]
   subnet_ids = [
@@ -887,13 +890,14 @@ module "ecs_saleor_dashboard" {
 
 # 5. Strapi Service
 module "ecs_strapi" {
-  source             = "../../../../modules/aws/ecs_service"
-  service_name       = "${var.environment}-${var.project}-strapi"
-  family             = "${var.environment}-${var.project}-strapi-task"
-  cluster_arn        = module.ecs_cluster.cluster_arn
-  execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.ecs_task_role.role_arn
-  cpu                = "512"
+  source                            = "../../../../modules/aws/ecs_service"
+  service_name                      = "${var.environment}-${var.project}-strapi"
+  family                            = "${var.environment}-${var.project}-strapi-task"
+  cluster_arn                       = module.ecs_cluster.cluster_arn
+  execution_role_arn                = module.ecs_execution_role.role_arn
+  task_role_arn                     = module.ecs_task_role.role_arn
+  health_check_grace_period_seconds = 300
+  cpu                               = "512"
   memory             = "1024"
   launch_type        = "FARGATE"
   environment        = var.environment
