@@ -14,8 +14,8 @@ output "private_subnet_ids" {
 }
 
 output "bastion_public_ip" {
-  value       = module.bastion_host.public_ip
-  description = "Public IP address of the Bastion Host"
+  value       = module.bastion_eip.public_ip
+  description = "Elastic IP address allocated and associated with the Bastion Host"
 }
 
 output "erp_private_ip" {
@@ -76,4 +76,14 @@ output "saleor_secrets_arn" {
 output "postgres_db_secrets_arn" {
   value       = module.postgres_db_secrets.secret_arn
   description = "ARN of the PostgreSQL database Secrets Manager secret"
+}
+
+output "s3_media_bucket_name" {
+  value       = module.s3_media.bucket_name
+  description = "Name of the Public S3 Media Bucket for Saleor and Strapi"
+}
+
+output "s3_media_bucket_domain" {
+  value       = module.s3_media.bucket_regional_domain_name
+  description = "Regional domain name of the Public S3 Media Bucket"
 }

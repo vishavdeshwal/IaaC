@@ -344,6 +344,24 @@ module "target_group_saleor_dashboard" {
   project           = var.project
 }
 
+module "target_group_erp" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "erp"
+  port              = 80
+  protocol          = "HTTP"
+  target_type       = "instance"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/"
+  environment       = var.environment
+  project           = var.project
+}
+
+resource "aws_lb_target_group_attachment" "erp" {
+  target_group_arn = module.target_group_erp.target_group_arn
+  target_id        = module.erp_server.instance_id
+  port             = 80
+}
+
 module "alb" {
   source                 = "../../../../modules/aws/alb"
   name                   = "main"
@@ -358,7 +376,7 @@ module "alb" {
 }
 
 resource "aws_lb_listener_rule" "strapi_rule" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 10
 
   action {
@@ -367,14 +385,14 @@ resource "aws_lb_listener_rule" "strapi_rule" {
   }
 
   condition {
-    path_pattern {
-      values = ["/strapi*"]
+    host_header {
+      values = ["cms-preprod.fixxly.in"]
     }
   }
 }
 
 resource "aws_lb_listener_rule" "saleor_rule" {
-  listener_arn = module.alb.http_listener_arn
+  listener_arn = module.alb.https_listener_arn
   priority     = 20
 
   action {
@@ -383,15 +401,21 @@ resource "aws_lb_listener_rule" "saleor_rule" {
   }
 
   condition {
+    host_header {
+      values = ["saleor-preprod.fixxly.in"]
+    }
+  }
+
+  condition {
     path_pattern {
-      values = ["/saleor*", "/graphql*"]
+      values = ["/graphql*", "/thumbnail/*", "/.well-known/*", "/plugins/*"]
     }
   }
 }
 
 resource "aws_lb_listener_rule" "saleor_dashboard_rule" {
-  listener_arn = module.alb.http_listener_arn
-  priority     = 30
+  listener_arn = module.alb.https_listener_arn
+  priority     = 25
 
   action {
     type             = "forward"
@@ -399,8 +423,24 @@ resource "aws_lb_listener_rule" "saleor_dashboard_rule" {
   }
 
   condition {
-    path_pattern {
-      values = ["/dashboard*"]
+    host_header {
+      values = ["saleor-preprod.fixxly.in"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "erp_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 30
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_erp.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["erp-preprod.fixxly.in"]
     }
   }
 }
@@ -455,6 +495,14 @@ module "bastion_host" {
   root_volume_size     = 20
   root_volume_type     = "gp3"
 
+  environment = var.environment
+  project     = var.project
+}
+
+module "bastion_eip" {
+  source      = "../../../../modules/aws/eip"
+  name        = "bastion-eip"
+  instance_id = module.bastion_host.instance_id
   environment = var.environment
   project     = var.project
 }
@@ -552,6 +600,51 @@ module "ecs_task_role" {
   })
   environment = var.environment
   project     = var.project
+}
+
+# ----------- Public S3 Media Bucket for Saleor & Strapi -----------
+
+module "s3_media" {
+  source                     = "../../../../modules/aws/s3"
+  bucket_name                = "${var.environment}-${var.project}-saleor-strapi-media"
+  enable_public_read         = true
+  manage_public_access_block = true
+  block_public_acls          = false
+  block_public_policy        = false
+  ignore_public_acls         = false
+  restrict_public_buckets    = false
+  enable_cors                = true
+  environment                = var.environment
+  project                    = var.project
+}
+
+resource "aws_iam_role_policy" "ecs_task_s3_policy" {
+  name = "${var.environment}-${var.project}-ecs-task-s3-policy"
+  role = module.ecs_task_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = module.s3_media.bucket_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:PutObjectAcl"
+        ]
+        Resource = "${module.s3_media.bucket_arn}/*"
+      }
+    ]
+  })
 }
 
 locals {
