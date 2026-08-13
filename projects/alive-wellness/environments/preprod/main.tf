@@ -77,12 +77,14 @@ module "nat_gateway" {
 }
 
 module "route_tables" {
-  source         = "../../../../modules/aws/route_tables"
-  vpc_id         = module.vpc.vpc_id
-  igw_id         = module.igw.igw_id
-  nat_gateway_id = module.nat_gateway.nat_gateway_id
-  environment    = var.environment
-  project        = var.project
+  source             = "../../../../modules/aws/route_tables"
+  vpc_id             = module.vpc.vpc_id
+  igw_id             = module.igw.igw_id
+  nat_gateway_id     = module.nat_gateway.nat_gateway_id
+  public_subnet_ids  = module.subnets.public_subnet_ids
+  private_subnet_ids = module.subnets.private_subnet_ids
+  environment        = var.environment
+  project            = var.project
 }
 
 module "route_table_association" {
@@ -305,7 +307,7 @@ module "ecs_execution_secrets_policy" {
   role_name   = module.ecs_execution_role.role_name
   environment = var.environment
   project     = var.project
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
@@ -351,7 +353,7 @@ module "ecs_task_s3_policy" {
   role_name   = module.ecs_task_role.role_name
   environment = var.environment
   project     = var.project
-  policy      = jsonencode({
+  policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
@@ -704,7 +706,7 @@ module "ecs_backend" {
           { name = "ERP_WEBHOOK_URL", value = module.sqs.queue_url }
         ]
       )
-      secrets     = [for k, v in var.backend_secrets : { name = k, valueFrom = "${module.backend_secrets.secret_arn}:${k}::" }]
+      secrets = [for k, v in var.backend_secrets : { name = k, valueFrom = "${module.backend_secrets.secret_arn}:${k}::" }]
     }
   ])
 }
@@ -785,16 +787,16 @@ module "ecs_backend_worker" {
 module "ecs_saleor_api" {
   source                 = "../../../../modules/aws/ecs_service"
   enable_execute_command = true
-  service_name       = "${var.environment}-${var.project}-saleor-api"
-  family             = "${var.environment}-${var.project}-saleor-api-task"
-  cluster_arn        = module.ecs_cluster.cluster_arn
-  execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.ecs_task_role.role_arn
-  cpu                = "512"
-  memory             = "1024"
-  launch_type        = "FARGATE"
-  environment        = var.environment
-  project            = var.project
+  service_name           = "${var.environment}-${var.project}-saleor-api"
+  family                 = "${var.environment}-${var.project}-saleor-api-task"
+  cluster_arn            = module.ecs_cluster.cluster_arn
+  execution_role_arn     = module.ecs_execution_role.role_arn
+  task_role_arn          = module.ecs_task_role.role_arn
+  cpu                    = "512"
+  memory                 = "1024"
+  launch_type            = "FARGATE"
+  environment            = var.environment
+  project                = var.project
 
   security_group_ids = [module.app_sg.security_group_id]
   subnet_ids = [
@@ -884,9 +886,9 @@ module "target_group_saleor" {
 }
 
 module "alb" {
-  source                 = "../../../../modules/aws/alb"
-  name                   = "app"
-  security_group_ids     = [module.app_sg.security_group_id]
+  source             = "../../../../modules/aws/alb"
+  name               = "app"
+  security_group_ids = [module.app_sg.security_group_id]
   subnet_ids = [
     module.subnets.public_subnet_ids["public-1"],
     module.subnets.public_subnet_ids["public-2"]
@@ -1134,16 +1136,16 @@ module "ecs_saleor_beat" {
 }
 
 module "target_group_saleor_dashboard" {
-  source               = "../../../../modules/aws/target_group"
-  name                 = "saledash"
-  name_override        = "preprod-saledash-tg"
-  port                 = 80
-  protocol             = "HTTP"
-  target_type          = "ip"
-  vpc_id               = module.vpc.vpc_id
-  health_check_path    = "/"
-  environment          = var.environment
-  project              = var.project
+  source            = "../../../../modules/aws/target_group"
+  name              = "saledash"
+  name_override     = "preprod-saledash-tg"
+  port              = 80
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/"
+  environment       = var.environment
+  project           = var.project
 }
 
 resource "aws_lb_listener_rule" "saleor_dashboard" {
