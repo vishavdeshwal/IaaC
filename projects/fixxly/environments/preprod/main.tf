@@ -175,6 +175,13 @@ module "app_sg" {
       description     = "Allow HTTPS traffic from ALB"
     },
     {
+      from_port       = 3000
+      to_port         = 3000
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow HTTP traffic from ALB"
+    },
+    {
       from_port       = 1337
       to_port         = 1337
       protocol        = "tcp"
@@ -350,7 +357,8 @@ module "strapi_target_group" {
   protocol          = "HTTP"
   target_type       = "ip"
   vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
+  health_check_path = "/_health"
+  health_check_matcher = "200-299"
   environment       = var.environment
   project           = var.project
 }
@@ -1029,6 +1037,27 @@ resource "aws_iam_role_policy_attachment" "ecs_backend_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "ecs_backend_cloudwatch_exec_policy" {
+  name = "${var.environment}-${var.project}-ecs-backend-cloudwatch-exec-policy"
+  role = module.ecs_backend_execution_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy" "ecs_backend_secretsmanager_exec_policy" {
   name = "${var.environment}-${var.project}-ecs-backend-secretsmanager-exec-policy"
   role = module.ecs_backend_execution_role.role_name
@@ -1117,6 +1146,27 @@ resource "aws_iam_role_policy_attachment" "ecs_frontend_execution_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "ecs_frontend_cloudwatch_exec_policy" {
+  name = "${var.environment}-${var.project}-ecs-frontend-cloudwatch-exec-policy"
+  role = module.ecs_frontend_execution_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 module "ecs_frontend_task_role" {
   source = "../../../../modules/aws/iam_role"
   name   = "${var.environment}-${var.project}-ecs-frontend-task-role"
@@ -1159,6 +1209,27 @@ module "ecs_saleor_execution_role" {
 resource "aws_iam_role_policy_attachment" "ecs_saleor_execution_policy" {
   role       = module.ecs_saleor_execution_role.role_name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "ecs_saleor_cloudwatch_exec_policy" {
+  name = "${var.environment}-${var.project}-ecs-saleor-cloudwatch-exec-policy"
+  role = module.ecs_saleor_execution_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 resource "aws_iam_role_policy" "ecs_saleor_secretsmanager_exec_policy" {
@@ -1245,6 +1316,27 @@ module "ecs_strapi_execution_role" {
 resource "aws_iam_role_policy_attachment" "ecs_strapi_execution_policy" {
   role       = module.ecs_strapi_execution_role.role_name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "ecs_strapi_cloudwatch_exec_policy" {
+  name = "${var.environment}-${var.project}-ecs-strapi-cloudwatch-exec-policy"
+  role = module.ecs_strapi_execution_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
 }
 
 resource "aws_iam_role_policy" "ecs_strapi_secretsmanager_exec_policy" {
