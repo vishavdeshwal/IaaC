@@ -38,6 +38,11 @@ output "rds_postgres_endpoint" {
   description = "Connection endpoint for RDS PostgreSQL instance (for Saleor & Strapi)"
 }
 
+output "rds_backend_postgres_endpoint" {
+  value       = module.rds_backend_postgres.endpoint
+  description = "Connection endpoint for Dedicated Backend RDS PostgreSQL instance (db.m5.xlarge)"
+}
+
 output "redis_primary_endpoint" {
   value       = module.elasticache_redis.redis_primary_endpoint
   description = "Primary endpoint address for ElastiCache Redis cluster"

@@ -1671,6 +1671,26 @@ module "rds_postgres" {
   project     = var.project
 }
 
+# ----------- RDS PostgreSQL (Dedicated for Backend Microservices) -----------
+
+module "rds_backend_postgres" {
+  source             = "../../../../modules/aws/rds"
+  identifier         = "backend-postgres"
+  engine             = "postgres"
+  engine_version     = var.postgres_engine_version
+  instance_class     = "db.m5.xlarge"
+  allocated_storage  = 100
+  storage_type       = "gp3"
+  db_name            = "fixxlybackend"
+  username           = var.backend_postgres_master_user_name
+  password           = var.backend_postgres_master_user_pass
+  subnet_ids         = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
+  security_group_ids = [module.postgres_sg.security_group_id]
+
+  environment = var.environment
+  project     = var.project
+}
+
 # ----------- ElastiCache Redis -----------
 
 module "elasticache_redis" {
@@ -1783,7 +1803,10 @@ module "ecs_frontend" {
 }
 
 locals {
-  backend_common_secrets = [for k, v in var.backend_secrets : { name = k, valueFrom = "${module.backend_secrets.secret_arn}:${k}::" }]
+  backend_common_secrets = concat(
+    [{ name = "DATABASE_URL", valueFrom = "${module.backend_secrets.secret_arn}:DATABASE_URL::" }],
+    [for k, v in var.backend_secrets : { name = k, valueFrom = "${module.backend_secrets.secret_arn}:${k}::" }]
+  )
   backend_common_env = concat(
     [
       { name = "NODE_ENV", value = "staging" },

@@ -100,6 +100,18 @@ variable "postgres_master_user_pass" {
   sensitive   = true
 }
 
+variable "backend_postgres_master_user_name" {
+  type        = string
+  description = "Master username for Dedicated Backend RDS PostgreSQL"
+  default     = "postgres"
+}
+
+variable "backend_postgres_master_user_pass" {
+  type        = string
+  description = "Master password for Dedicated Backend RDS PostgreSQL"
+  sensitive   = true
+}
+
 # --- ALB & App Variables ---
 
 variable "health_check_path" {
