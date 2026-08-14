@@ -306,6 +306,41 @@ module "redis_sg" {
   ]
 }
 
+module "msk_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "msk-sg"
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 9092
+      to_port         = 9092
+      protocol        = "tcp"
+      security_groups = [module.app_sg.security_group_id]
+      description     = "Allow Plaintext Kafka traffic from App SG"
+    },
+    {
+      from_port       = 9094
+      to_port         = 9094
+      protocol        = "tcp"
+      security_groups = [module.app_sg.security_group_id]
+      description     = "Allow TLS Kafka traffic from App SG"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
 # ----------- ALB & Target Groups -----------
 
 module "strapi_target_group" {
@@ -1651,6 +1686,21 @@ module "elasticache_redis" {
   project     = var.project
 }
 
+# ----------- Amazon MSK Managed Kafka Cluster -----------
+
+module "msk" {
+  source             = "../../../../modules/aws/msk"
+  cluster_name       = "${var.environment}-${var.project}-msk"
+  kafka_version      = "3.6.0"
+  number_of_nodes    = 2
+  instance_type      = "kafka.t3.small"
+  ebs_volume_size    = 20
+  client_subnets     = [module.subnets.private_subnet_ids["app-1"], module.subnets.private_subnet_ids["app-2"]]
+  security_group_ids = [module.msk_sg.security_group_id]
+  environment        = var.environment
+  project            = var.project
+}
+
 // =============================================================
 // SECTION 4: SECURITY & SECRETS MANAGER
 // =============================================================
@@ -1683,65 +1733,7 @@ module "strapi_secrets" {
 # SECTION 5: KAFKA, WEB FRONTEND & BACKEND MICROSERVICES ECS SERVICES
 # =============================================================
 
-# --- 1. Single-Node KRaft Apache Kafka Service ---
-module "ecs_kafka" {
-  source                            = "../../../../modules/aws/ecs_service"
-  service_name                      = "${var.environment}-${var.project}-kafka"
-  family                            = "${var.environment}-${var.project}-kafka-task"
-  cluster_arn                       = module.ecs_cluster.cluster_arn
-  execution_role_arn                = module.ecs_backend_execution_role.role_arn
-  task_role_arn                     = module.ecs_backend_task_role.role_arn
-  cpu                               = "512"
-  memory                            = "1024"
-  launch_type                       = "FARGATE"
-  environment                       = var.environment
-  project                           = var.project
-  namespace_id                      = aws_service_discovery_private_dns_namespace.internal.id
-  service_discovery_name            = "kafka"
-  container_name                    = "kafka"
-  container_port                    = 9092
-
-  security_group_ids = [module.app_sg.security_group_id]
-  subnet_ids = [
-    module.subnets.private_subnet_ids["app-1"],
-    module.subnets.private_subnet_ids["app-2"]
-  ]
-
-  container_definitions = jsonencode([
-    {
-      name      = "kafka"
-      image     = "bitnamilegacy/kafka:3.6"
-      essential = true
-      portMappings = [
-        {
-          containerPort = 9092
-          protocol      = "tcp"
-        }
-      ]
-      environment = [
-        { name = "KAFKA_CFG_NODE_ID", value = "1" },
-        { name = "KAFKA_CFG_PROCESS_ROLES", value = "controller,broker" },
-        { name = "KAFKA_CFG_LISTENERS", value = "PLAINTEXT://:9092,CONTROLLER://:9093" },
-        { name = "KAFKA_CFG_ADVERTISED_LISTENERS", value = "PLAINTEXT://kafka.preprod.fixxly.internal:9092" },
-        { name = "KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP", value = "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT" },
-        { name = "KAFKA_CFG_CONTROLLER_QUORUM_VOTERS", value = "1@kafka.preprod.fixxly.internal:9093" },
-        { name = "KAFKA_CFG_CONTROLLER_LISTENER_NAMES", value = "CONTROLLER" },
-        { name = "ALLOW_PLAINTEXT_LISTENER", value = "yes" }
-      ]
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "ecs"
-          "awslogs-create-group"  = "true"
-          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-kafka"
-        }
-      }
-    }
-  ])
-}
-
-# --- 2. Web Frontend Service ---
+# --- 1. Web Frontend Service ---
 module "ecs_frontend" {
   source                            = "../../../../modules/aws/ecs_service"
   service_name                      = "${var.environment}-${var.project}-frontend"
@@ -1796,14 +1788,20 @@ locals {
     [
       { name = "NODE_ENV", value = "staging" },
       { name = "REDIS_URL", value = "rediss://${module.elasticache_redis.redis_primary_endpoint}:6379" },
-      { name = "KAFKA_BROKERS", value = "kafka.preprod.fixxly.internal:9092" },
-      { name = "AUTH_SERVICE_URL", value = "http://auth-service.preprod.fixxly.internal:3001" },
-      { name = "PRODUCT_SERVICE_URL", value = "http://product-service.preprod.fixxly.internal:3003" },
-      { name = "ORDER_SERVICE_URL", value = "http://order-service.preprod.fixxly.internal:3004" },
-      { name = "CART_SERVICE_URL", value = "http://cart-service.preprod.fixxly.internal:3005" },
-      { name = "INVENTORY_SERVICE_URL", value = "http://inventory-service.preprod.fixxly.internal:3006" },
-      { name = "CMS_BRIDGE_URL", value = "http://cms-bridge.preprod.fixxly.internal:3007" },
-      { name = "SERVICEABILITY_URL", value = "http://serviceability-service.preprod.fixxly.internal:3014" }
+      { name = "KAFKA_BROKERS", value = module.msk.bootstrap_brokers_plaintext },
+      { name = "AUTH_BASE_URL", value = "http://auth-service.preprod.fixxly.internal:3001" },
+      { name = "PRODUCT_BASE_URL", value = "http://product-service.preprod.fixxly.internal:3003" },
+      { name = "ORDER_BASE_URL", value = "http://order-service.preprod.fixxly.internal:3004" },
+      { name = "CART_BASE_URL", value = "http://cart-service.preprod.fixxly.internal:3005" },
+      { name = "INVENTORY_BASE_URL", value = "http://inventory-service.preprod.fixxly.internal:3006" },
+      { name = "CMS_BASE_URL", value = "http://cms-bridge.preprod.fixxly.internal:3007" },
+      { name = "COUPON_BASE_URL", value = "http://coupon-service.preprod.fixxly.internal:3008" },
+      { name = "NOTIFICATION_BASE_URL", value = "http://notification-service.preprod.fixxly.internal:3009" },
+      { name = "PAYMENT_BASE_URL", value = "http://payment-service.preprod.fixxly.internal:3010" },
+      { name = "ERP_SYNC_BASE_URL", value = "http://erp-sync-service.preprod.fixxly.internal:3011" },
+      { name = "WALLET_BASE_URL", value = "http://wallet-service.preprod.fixxly.internal:3012" },
+      { name = "ASSETS_BASE_URL", value = "http://assets-service.preprod.fixxly.internal:3013" },
+      { name = "SERVICEABILITY_BASE_URL", value = "http://serviceability-service.preprod.fixxly.internal:3014" }
     ],
     [for k, v in var.backend_env_vars : { name = k, value = v }]
   )

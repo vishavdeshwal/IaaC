@@ -133,9 +133,14 @@ output "service_discovery_namespace_name" {
   description = "Cloud Map Private DNS Namespace Name"
 }
 
-output "kafka_service_discovery_endpoint" {
-  value       = "kafka.${aws_service_discovery_private_dns_namespace.internal.name}:9092"
-  description = "Internal Kafka broker endpoint"
+output "msk_cluster_arn" {
+  value       = module.msk.cluster_arn
+  description = "ARN of the Amazon MSK Managed Kafka Cluster"
+}
+
+output "msk_bootstrap_brokers_plaintext" {
+  value       = module.msk.bootstrap_brokers_plaintext
+  description = "Connection string for Amazon MSK Managed Kafka bootstrap brokers"
 }
 
 # --- Secrets & IAM Outputs ---
