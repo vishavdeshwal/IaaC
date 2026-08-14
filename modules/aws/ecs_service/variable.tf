@@ -159,3 +159,15 @@ variable "deployment_maximum_percent" {
   default     = 200
   description = "Upper limit on the number of running tasks during a deployment"
 }
+
+variable "namespace_id" {
+  type        = string
+  default     = null
+  description = "AWS Cloud Map Private DNS Namespace ID for automatic Service Discovery"
+}
+
+variable "service_discovery_name" {
+  type        = string
+  default     = null
+  description = "Custom DNS name for Service Discovery (defaults to service_name if null)"
+}

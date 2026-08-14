@@ -20,6 +20,25 @@ resource "aws_ecs_task_definition" "task" {
   }
 }
 
+resource "aws_service_discovery_service" "discovery" {
+  count = var.namespace_id != null ? 1 : 0
+  name  = var.service_discovery_name != null ? var.service_discovery_name : var.service_name
+
+  dns_config {
+    namespace_id   = var.namespace_id
+    routing_policy = "MULTIVALUE"
+
+    dns_records {
+      ttl  = 10
+      type = "A"
+    }
+  }
+
+  health_check_custom_config {
+    failure_threshold = 1
+  }
+}
+
 resource "aws_ecs_service" "service" {
   name                               = var.service_name
   cluster                            = var.cluster_arn
@@ -50,6 +69,13 @@ resource "aws_ecs_service" "service" {
       target_group_arn = var.target_group_arn
       container_name   = var.container_name
       container_port   = var.container_port
+    }
+  }
+
+  dynamic "service_registries" {
+    for_each = var.namespace_id != null ? [1] : []
+    content {
+      registry_arn = aws_service_discovery_service.discovery[0].arn
     }
   }
 

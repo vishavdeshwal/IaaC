@@ -363,6 +363,116 @@ resource "aws_lb_target_group_attachment" "erp" {
   port             = 80
 }
 
+# --- Microservices & Frontend Target Groups ---
+
+module "target_group_frontend" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "frontend"
+  port              = var.frontend_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/"
+  environment       = var.environment
+  project           = var.project
+}
+
+module "target_group_bff" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "bff"
+  port              = var.consumer_bff_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
+module "target_group_payment" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "payment"
+  port              = var.payment_service_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
+module "target_group_erp_sync" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "erpsync"
+  port              = var.erp_sync_service_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
+module "target_group_product" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "product"
+  port              = var.product_service_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
+module "target_group_inventory" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "inventory"
+  port              = var.inventory_service_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
+module "target_group_cart" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "cart"
+  port              = var.cart_service_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
+module "target_group_coupon" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "coupon"
+  port              = var.coupon_service_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
+module "target_group_serviceability" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "srvability"
+  port              = var.serviceability_service_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
 module "alb" {
   source                 = "../../../../modules/aws/alb"
   name                   = "main"
@@ -376,9 +486,25 @@ module "alb" {
   project                = var.project
 }
 
+resource "aws_lb_listener_rule" "frontend_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 1
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_frontend.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["fe-preprod.fixxly.in"]
+    }
+  }
+}
+
 resource "aws_lb_listener_rule" "strapi_rule" {
   listener_arn = module.alb.https_listener_arn
-  priority     = 10
+  priority     = 2
 
   action {
     type             = "forward"
@@ -394,7 +520,7 @@ resource "aws_lb_listener_rule" "strapi_rule" {
 
 resource "aws_lb_listener_rule" "saleor_rule" {
   listener_arn = module.alb.https_listener_arn
-  priority     = 20
+  priority     = 3
 
   action {
     type             = "forward"
@@ -416,7 +542,7 @@ resource "aws_lb_listener_rule" "saleor_rule" {
 
 resource "aws_lb_listener_rule" "saleor_dashboard_rule" {
   listener_arn = module.alb.https_listener_arn
-  priority     = 25
+  priority     = 4
 
   action {
     type             = "forward"
@@ -432,7 +558,7 @@ resource "aws_lb_listener_rule" "saleor_dashboard_rule" {
 
 resource "aws_lb_listener_rule" "erp_rule" {
   listener_arn = module.alb.https_listener_arn
-  priority     = 30
+  priority     = 5
 
   action {
     type             = "forward"
@@ -442,6 +568,178 @@ resource "aws_lb_listener_rule" "erp_rule" {
   condition {
     host_header {
       values = ["erp-preprod.fixxly.in"]
+    }
+  }
+}
+
+# --- api-preprod.fixxly.in Path-Based Rules ---
+
+resource "aws_lb_listener_rule" "payment_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 10
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_payment.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api-preprod.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/payments/webhooks/pg/cashfree*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "erp_sync_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 20
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_erp_sync.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api-preprod.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/erp/webhooks/erpnext*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "product_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 30
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_product.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api-preprod.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/erp/products*", "/api/v1/erp/categories*", "/api/v1/erp/product-types*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "inventory_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 40
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_inventory.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api-preprod.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/erp/stock*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "cart_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 50
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_cart.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api-preprod.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/erp/delivery-policy*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "coupon_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 60
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_coupon.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api-preprod.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/coupons/admin*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "serviceability_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 70
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_serviceability.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api-preprod.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/admin/serviceability*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "bff_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 5000
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_bff.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api-preprod.fixxly.in"]
     }
   }
 }
@@ -550,6 +848,111 @@ module "ecr_strapi" {
   project     = var.project
 }
 
+module "ecr_frontend" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "frontend"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_consumer_bff" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "consumer-bff"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_auth_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "auth-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_product_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "product-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_order_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "order-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_cart_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "cart-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_inventory_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "inventory-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_cms_bridge" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "cms-bridge"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_coupon_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "coupon-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_notification_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "notification-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_payment_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "payment-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_erp_sync_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "erp-sync-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_wallet_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "wallet-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_assets_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "assets-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_serviceability_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "serviceability-service"
+  environment = var.environment
+  project     = var.project
+}
+
 # ----------- ECS Cluster & Microservices -----------
 
 module "ecs_cluster" {
@@ -559,10 +962,17 @@ module "ecs_cluster" {
   project      = var.project
 }
 
-# IAM Execution & Task Roles
-module "ecs_execution_role" {
+# AWS Cloud Map Private DNS Namespace for Service Discovery
+resource "aws_service_discovery_private_dns_namespace" "internal" {
+  name        = "${var.environment}.${var.project}.internal"
+  description = "Private Service Discovery DNS Namespace for ${var.environment}-${var.project} Microservices"
+  vpc         = module.vpc.vpc_id
+}
+
+# Dedicated Backend IAM Execution & Task Roles
+module "ecs_backend_execution_role" {
   source = "../../../../modules/aws/iam_role"
-  name   = "${var.environment}-${var.project}-ecs-exec-role"
+  name   = "${var.environment}-${var.project}-ecs-backend-exec-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -579,14 +989,14 @@ module "ecs_execution_role" {
   project     = var.project
 }
 
-resource "aws_iam_role_policy_attachment" "ecs_execution_policy" {
-  role       = module.ecs_execution_role.role_name
+resource "aws_iam_role_policy_attachment" "ecs_backend_execution_policy" {
+  role       = module.ecs_backend_execution_role.role_name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-resource "aws_iam_role_policy" "ecs_secretsmanager_execution_policy" {
-  name = "${var.environment}-${var.project}-ecs-secretsmanager-exec-policy"
-  role = module.ecs_execution_role.role_name
+resource "aws_iam_role_policy" "ecs_backend_secretsmanager_exec_policy" {
+  name = "${var.environment}-${var.project}-ecs-backend-secretsmanager-exec-policy"
+  role = module.ecs_backend_execution_role.role_name
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -598,8 +1008,224 @@ resource "aws_iam_role_policy" "ecs_secretsmanager_execution_policy" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          module.saleor_secrets.secret_arn,
           module.backend_secrets.secret_arn,
+          "${module.backend_secrets.secret_arn}:*"
+        ]
+      }
+    ]
+  })
+}
+
+module "ecs_backend_task_role" {
+  source = "../../../../modules/aws/iam_role"
+  name   = "${var.environment}-${var.project}-ecs-backend-task-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  environment = var.environment
+  project     = var.project
+}
+
+resource "aws_iam_role_policy" "ecs_backend_secretsmanager_task_policy" {
+  name = "${var.environment}-${var.project}-ecs-backend-secretsmanager-task-policy"
+  role = module.ecs_backend_task_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          module.backend_secrets.secret_arn,
+          "${module.backend_secrets.secret_arn}:*"
+        ]
+      }
+    ]
+  })
+}
+
+# Dedicated Frontend IAM Execution & Task Roles
+module "ecs_frontend_execution_role" {
+  source = "../../../../modules/aws/iam_role"
+  name   = "${var.environment}-${var.project}-ecs-frontend-exec-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  environment = var.environment
+  project     = var.project
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_frontend_execution_policy" {
+  role       = module.ecs_frontend_execution_role.role_name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+module "ecs_frontend_task_role" {
+  source = "../../../../modules/aws/iam_role"
+  name   = "${var.environment}-${var.project}-ecs-frontend-task-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  environment = var.environment
+  project     = var.project
+}
+
+# Dedicated Saleor IAM Execution & Task Roles
+module "ecs_saleor_execution_role" {
+  source = "../../../../modules/aws/iam_role"
+  name   = "${var.environment}-${var.project}-ecs-saleor-exec-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  environment = var.environment
+  project     = var.project
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_saleor_execution_policy" {
+  role       = module.ecs_saleor_execution_role.role_name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "ecs_saleor_secretsmanager_exec_policy" {
+  name = "${var.environment}-${var.project}-ecs-saleor-secretsmanager-exec-policy"
+  role = module.ecs_saleor_execution_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          module.saleor_secrets.secret_arn
+        ]
+      }
+    ]
+  })
+}
+
+module "ecs_saleor_task_role" {
+  source = "../../../../modules/aws/iam_role"
+  name   = "${var.environment}-${var.project}-ecs-saleor-task-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  environment = var.environment
+  project     = var.project
+}
+
+resource "aws_iam_role_policy" "ecs_saleor_secretsmanager_task_policy" {
+  name = "${var.environment}-${var.project}-ecs-saleor-secretsmanager-task-policy"
+  role = module.ecs_saleor_task_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
+          module.saleor_secrets.secret_arn
+        ]
+      }
+    ]
+  })
+}
+
+# Dedicated Strapi IAM Execution & Task Roles
+module "ecs_strapi_execution_role" {
+  source = "../../../../modules/aws/iam_role"
+  name   = "${var.environment}-${var.project}-ecs-strapi-exec-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs-tasks.amazonaws.com"
+        }
+      }
+    ]
+  })
+  environment = var.environment
+  project     = var.project
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_strapi_execution_policy" {
+  role       = module.ecs_strapi_execution_role.role_name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy" "ecs_strapi_secretsmanager_exec_policy" {
+  name = "${var.environment}-${var.project}-ecs-strapi-secretsmanager-exec-policy"
+  role = module.ecs_strapi_execution_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret"
+        ]
+        Resource = [
           module.strapi_secrets.secret_arn
         ]
       }
@@ -607,9 +1233,9 @@ resource "aws_iam_role_policy" "ecs_secretsmanager_execution_policy" {
   })
 }
 
-module "ecs_task_role" {
+module "ecs_strapi_task_role" {
   source = "../../../../modules/aws/iam_role"
-  name   = "${var.environment}-${var.project}-ecs-task-role"
+  name   = "${var.environment}-${var.project}-ecs-strapi-task-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -626,9 +1252,9 @@ module "ecs_task_role" {
   project     = var.project
 }
 
-resource "aws_iam_role_policy" "ecs_secretsmanager_task_policy" {
-  name = "${var.environment}-${var.project}-ecs-secretsmanager-task-policy"
-  role = module.ecs_task_role.role_name
+resource "aws_iam_role_policy" "ecs_strapi_secretsmanager_task_policy" {
+  name = "${var.environment}-${var.project}-ecs-strapi-secretsmanager-task-policy"
+  role = module.ecs_strapi_task_role.role_name
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -640,8 +1266,6 @@ resource "aws_iam_role_policy" "ecs_secretsmanager_task_policy" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          module.saleor_secrets.secret_arn,
-          module.backend_secrets.secret_arn,
           module.strapi_secrets.secret_arn
         ]
       }
@@ -665,9 +1289,38 @@ module "s3_media" {
   project                    = var.project
 }
 
-resource "aws_iam_role_policy" "ecs_task_s3_policy" {
-  name = "${var.environment}-${var.project}-ecs-task-s3-policy"
-  role = module.ecs_task_role.role_name
+resource "aws_iam_role_policy" "ecs_saleor_task_s3_policy" {
+  name = "${var.environment}-${var.project}-ecs-saleor-task-s3-policy"
+  role = module.ecs_saleor_task_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = module.s3_media.bucket_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:PutObjectAcl"
+        ]
+        Resource = "${module.s3_media.bucket_arn}/*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "ecs_strapi_task_s3_policy" {
+  name = "${var.environment}-${var.project}-ecs-strapi-task-s3-policy"
+  role = module.ecs_strapi_task_role.role_name
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -708,8 +1361,8 @@ module "ecs_saleor_api" {
   service_name                      = "${var.environment}-${var.project}-saleor-api"
   family                            = "${var.environment}-${var.project}-saleor-api-task"
   cluster_arn                       = module.ecs_cluster.cluster_arn
-  execution_role_arn                = module.ecs_execution_role.role_arn
-  task_role_arn                     = module.ecs_task_role.role_arn
+  execution_role_arn                = module.ecs_saleor_execution_role.role_arn
+  task_role_arn                     = module.ecs_saleor_task_role.role_arn
   health_check_grace_period_seconds = 300
   cpu                               = "512"
   memory                 = "1024"
@@ -759,8 +1412,8 @@ module "ecs_saleor_worker" {
   service_name       = "${var.environment}-${var.project}-saleor-worker"
   family             = "${var.environment}-${var.project}-saleor-worker-task"
   cluster_arn        = module.ecs_cluster.cluster_arn
-  execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.ecs_task_role.role_arn
+  execution_role_arn = module.ecs_saleor_execution_role.role_arn
+  task_role_arn      = module.ecs_saleor_task_role.role_arn
   cpu                = "512"
   memory             = "1024"
   launch_type        = "FARGATE"
@@ -801,8 +1454,8 @@ module "ecs_saleor_beat" {
   service_name       = "${var.environment}-${var.project}-saleor-beat"
   family             = "${var.environment}-${var.project}-saleor-beat-task"
   cluster_arn        = module.ecs_cluster.cluster_arn
-  execution_role_arn = module.ecs_execution_role.role_arn
-  task_role_arn      = module.ecs_task_role.role_arn
+  execution_role_arn = module.ecs_saleor_execution_role.role_arn
+  task_role_arn      = module.ecs_saleor_task_role.role_arn
   cpu                = "512"
   memory             = "1024"
   launch_type        = "FARGATE"
@@ -847,8 +1500,8 @@ module "ecs_saleor_dashboard" {
   service_name                      = "${var.environment}-${var.project}-saleor-dashboard"
   family                            = "${var.environment}-${var.project}-saleor-dashboard-task"
   cluster_arn                       = module.ecs_cluster.cluster_arn
-  execution_role_arn                = module.ecs_execution_role.role_arn
-  task_role_arn                     = module.ecs_task_role.role_arn
+  execution_role_arn                = module.ecs_saleor_execution_role.role_arn
+  task_role_arn                     = module.ecs_saleor_task_role.role_arn
   health_check_grace_period_seconds = 300
   cpu                               = "256"
   memory                            = "512"
@@ -896,8 +1549,8 @@ module "ecs_strapi" {
   service_name                      = "${var.environment}-${var.project}-strapi"
   family                            = "${var.environment}-${var.project}-strapi-task"
   cluster_arn                       = module.ecs_cluster.cluster_arn
-  execution_role_arn                = module.ecs_execution_role.role_arn
-  task_role_arn                     = module.ecs_task_role.role_arn
+  execution_role_arn                = module.ecs_strapi_execution_role.role_arn
+  task_role_arn                     = module.ecs_strapi_task_role.role_arn
   health_check_grace_period_seconds = 300
   cpu                               = "512"
   memory             = "1024"
@@ -1024,4 +1677,260 @@ module "strapi_secrets" {
   secret_string = jsonencode(var.strapi_secrets)
   environment   = var.environment
   project       = var.project
+}
+
+# =============================================================
+# SECTION 5: KAFKA, WEB FRONTEND & BACKEND MICROSERVICES ECS SERVICES
+# =============================================================
+
+# --- 1. Single-Node KRaft Apache Kafka Service ---
+module "ecs_kafka" {
+  source                            = "../../../../modules/aws/ecs_service"
+  service_name                      = "${var.environment}-${var.project}-kafka"
+  family                            = "${var.environment}-${var.project}-kafka-task"
+  cluster_arn                       = module.ecs_cluster.cluster_arn
+  execution_role_arn                = module.ecs_backend_execution_role.role_arn
+  task_role_arn                     = module.ecs_backend_task_role.role_arn
+  cpu                               = "512"
+  memory                            = "1024"
+  launch_type                       = "FARGATE"
+  environment                       = var.environment
+  project                           = var.project
+  namespace_id                      = aws_service_discovery_private_dns_namespace.internal.id
+  service_discovery_name            = "kafka"
+  container_name                    = "kafka"
+  container_port                    = 9092
+
+  security_group_ids = [module.app_sg.security_group_id]
+  subnet_ids = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+
+  container_definitions = jsonencode([
+    {
+      name      = "kafka"
+      image     = "bitnamilegacy/kafka:3.6"
+      essential = true
+      portMappings = [
+        {
+          containerPort = 9092
+          protocol      = "tcp"
+        }
+      ]
+      environment = [
+        { name = "KAFKA_CFG_NODE_ID", value = "1" },
+        { name = "KAFKA_CFG_PROCESS_ROLES", value = "controller,broker" },
+        { name = "KAFKA_CFG_LISTENERS", value = "PLAINTEXT://:9092,CONTROLLER://:9093" },
+        { name = "KAFKA_CFG_ADVERTISED_LISTENERS", value = "PLAINTEXT://kafka.preprod.fixxly.internal:9092" },
+        { name = "KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP", value = "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT" },
+        { name = "KAFKA_CFG_CONTROLLER_QUORUM_VOTERS", value = "1@kafka.preprod.fixxly.internal:9093" },
+        { name = "KAFKA_CFG_CONTROLLER_LISTENER_NAMES", value = "CONTROLLER" },
+        { name = "ALLOW_PLAINTEXT_LISTENER", value = "yes" }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-kafka"
+        }
+      }
+    }
+  ])
+}
+
+# --- 2. Web Frontend Service ---
+module "ecs_frontend" {
+  source                            = "../../../../modules/aws/ecs_service"
+  service_name                      = "${var.environment}-${var.project}-frontend"
+  family                            = "${var.environment}-${var.project}-frontend-task"
+  cluster_arn                       = module.ecs_cluster.cluster_arn
+  execution_role_arn                = module.ecs_frontend_execution_role.role_arn
+  task_role_arn                     = module.ecs_frontend_task_role.role_arn
+  health_check_grace_period_seconds = 300
+  cpu                               = "512"
+  memory                            = "1024"
+  launch_type                       = "FARGATE"
+  environment                       = var.environment
+  project                           = var.project
+  container_name                    = "frontend"
+  container_port                    = var.frontend_port
+  target_group_arn                  = module.target_group_frontend.target_group_arn
+
+  security_group_ids = [module.app_sg.security_group_id]
+  subnet_ids = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+
+  container_definitions = jsonencode([
+    {
+      name      = "frontend"
+      image     = "${module.ecr_frontend.repository_url}:latest"
+      essential = true
+      portMappings = [
+        {
+          containerPort = var.frontend_port
+          protocol      = "tcp"
+        }
+      ]
+      environment = [for k, v in var.frontend_env_vars : { name = k, value = v }]
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-frontend"
+        }
+      }
+    }
+  ])
+}
+
+locals {
+  backend_common_secrets = [for k, v in var.backend_secrets : { name = k, valueFrom = "${module.backend_secrets.secret_arn}:${k}::" }]
+  backend_common_env = concat(
+    [
+      { name = "NODE_ENV", value = "staging" },
+      { name = "REDIS_URL", value = "rediss://${module.elasticache_redis.redis_primary_endpoint}:6379" },
+      { name = "KAFKA_BROKERS", value = "kafka.preprod.fixxly.internal:9092" },
+      { name = "AUTH_SERVICE_URL", value = "http://auth-service.preprod.fixxly.internal:3001" },
+      { name = "PRODUCT_SERVICE_URL", value = "http://product-service.preprod.fixxly.internal:3003" },
+      { name = "ORDER_SERVICE_URL", value = "http://order-service.preprod.fixxly.internal:3004" },
+      { name = "CART_SERVICE_URL", value = "http://cart-service.preprod.fixxly.internal:3005" },
+      { name = "INVENTORY_SERVICE_URL", value = "http://inventory-service.preprod.fixxly.internal:3006" },
+      { name = "CMS_BRIDGE_URL", value = "http://cms-bridge.preprod.fixxly.internal:3007" },
+      { name = "SERVICEABILITY_URL", value = "http://serviceability-service.preprod.fixxly.internal:3014" }
+    ],
+    [for k, v in var.backend_env_vars : { name = k, value = v }]
+  )
+
+  backend_services = {
+    "consumer-bff" = {
+      port             = var.consumer_bff_port
+      ecr_url          = module.ecr_consumer_bff.repository_url
+      target_group_arn = module.target_group_bff.target_group_arn
+    }
+    "auth-service" = {
+      port             = var.auth_service_port
+      ecr_url          = module.ecr_auth_service.repository_url
+      target_group_arn = null
+    }
+    "product-service" = {
+      port             = var.product_service_port
+      ecr_url          = module.ecr_product_service.repository_url
+      target_group_arn = module.target_group_product.target_group_arn
+    }
+    "order-service" = {
+      port             = var.order_service_port
+      ecr_url          = module.ecr_order_service.repository_url
+      target_group_arn = null
+    }
+    "cart-service" = {
+      port             = var.cart_service_port
+      ecr_url          = module.ecr_cart_service.repository_url
+      target_group_arn = module.target_group_cart.target_group_arn
+    }
+    "inventory-service" = {
+      port             = var.inventory_service_port
+      ecr_url          = module.ecr_inventory_service.repository_url
+      target_group_arn = module.target_group_inventory.target_group_arn
+    }
+    "cms-bridge" = {
+      port             = var.cms_bridge_port
+      ecr_url          = module.ecr_cms_bridge.repository_url
+      target_group_arn = null
+    }
+    "coupon-service" = {
+      port             = var.coupon_service_port
+      ecr_url          = module.ecr_coupon_service.repository_url
+      target_group_arn = module.target_group_coupon.target_group_arn
+    }
+    "notification-service" = {
+      port             = var.notification_service_port
+      ecr_url          = module.ecr_notification_service.repository_url
+      target_group_arn = null
+    }
+    "payment-service" = {
+      port             = var.payment_service_port
+      ecr_url          = module.ecr_payment_service.repository_url
+      target_group_arn = module.target_group_payment.target_group_arn
+    }
+    "erp-sync-service" = {
+      port             = var.erp_sync_service_port
+      ecr_url          = module.ecr_erp_sync_service.repository_url
+      target_group_arn = module.target_group_erp_sync.target_group_arn
+    }
+    "wallet-service" = {
+      port             = var.wallet_service_port
+      ecr_url          = module.ecr_wallet_service.repository_url
+      target_group_arn = null
+    }
+    "assets-service" = {
+      port             = var.assets_service_port
+      ecr_url          = module.ecr_assets_service.repository_url
+      target_group_arn = null
+    }
+    "serviceability-service" = {
+      port             = var.serviceability_service_port
+      ecr_url          = module.ecr_serviceability_service.repository_url
+      target_group_arn = module.target_group_serviceability.target_group_arn
+    }
+  }
+}
+
+# --- 3. 14 Backend Microservices ECS Definitions ---
+module "ecs_backend_services" {
+  for_each                          = local.backend_services
+  source                            = "../../../../modules/aws/ecs_service"
+  service_name                      = "${var.environment}-${var.project}-${each.key}"
+  family                            = "${var.environment}-${var.project}-${each.key}-task"
+  cluster_arn                       = module.ecs_cluster.cluster_arn
+  execution_role_arn                = module.ecs_backend_execution_role.role_arn
+  task_role_arn                     = module.ecs_backend_task_role.role_arn
+  health_check_grace_period_seconds = each.value.target_group_arn != null ? 300 : null
+  cpu                               = "256"
+  memory                            = "512"
+  launch_type                       = "FARGATE"
+  environment                       = var.environment
+  project                           = var.project
+  namespace_id                      = aws_service_discovery_private_dns_namespace.internal.id
+  service_discovery_name            = each.key
+  container_name                    = each.key
+  container_port                    = each.value.port
+  target_group_arn                  = each.value.target_group_arn
+
+  security_group_ids = [module.app_sg.security_group_id]
+  subnet_ids = [
+    module.subnets.private_subnet_ids["app-1"],
+    module.subnets.private_subnet_ids["app-2"]
+  ]
+
+  container_definitions = jsonencode([
+    {
+      name      = each.key
+      image     = "${each.value.ecr_url}:latest"
+      essential = true
+      portMappings = [
+        {
+          containerPort = each.value.port
+          protocol      = "tcp"
+        }
+      ]
+      environment = concat(local.backend_common_env, [{ name = "PORT", value = tostring(each.value.port) }])
+      secrets     = local.backend_common_secrets
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "ecs"
+          "awslogs-create-group"  = "true"
+          "awslogs-group"         = "/ecs/${var.environment}-${var.project}-${each.key}"
+        }
+      }
+    }
+  ])
 }

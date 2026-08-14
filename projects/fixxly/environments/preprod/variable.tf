@@ -138,6 +138,12 @@ variable "saleor_secrets" {
   default     = {}
 }
 
+variable "frontend_env_vars" {
+  type        = map(string)
+  description = "Environment variables for Web Frontend App"
+  default     = {}
+}
+
 variable "strapi_secrets" {
   type        = map(string)
   description = "Sensitive secrets stored in Secrets Manager for Strapi CMS"
@@ -148,4 +154,81 @@ variable "ec2_key_name" {
   type        = string
   description = "EC2 Key Pair name for SSH access"
   default     = ""
+}
+
+# --- Service Port Variables ---
+
+variable "frontend_port" {
+  type    = number
+  default = 3000
+}
+
+variable "consumer_bff_port" {
+  type    = number
+  default = 3020
+}
+
+variable "auth_service_port" {
+  type    = number
+  default = 3001
+}
+
+variable "product_service_port" {
+  type    = number
+  default = 3003
+}
+
+variable "order_service_port" {
+  type    = number
+  default = 3004
+}
+
+variable "cart_service_port" {
+  type    = number
+  default = 3005
+}
+
+variable "inventory_service_port" {
+  type    = number
+  default = 3006
+}
+
+variable "cms_bridge_port" {
+  type    = number
+  default = 3007
+}
+
+variable "coupon_service_port" {
+  type    = number
+  default = 3008
+}
+
+variable "notification_service_port" {
+  type    = number
+  default = 3009
+}
+
+variable "payment_service_port" {
+  type    = number
+  default = 3010
+}
+
+variable "erp_sync_service_port" {
+  type    = number
+  default = 3011
+}
+
+variable "wallet_service_port" {
+  type    = number
+  default = 3012
+}
+
+variable "assets_service_port" {
+  type    = number
+  default = 3013
+}
+
+variable "serviceability_service_port" {
+  type    = number
+  default = 3014
 }
