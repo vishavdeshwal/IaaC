@@ -1,8 +1,8 @@
 locals {
-  name = lower("${var.environment}-${var.project}-${var.identifier}")
+  name = var.identifier_override != null ? var.identifier_override : lower("${var.environment}-${var.project}-${var.identifier}")
 
   base_tags = {
-    Name        = "${var.environment}-${var.project}-${var.identifier}"
+    Name        = var.identifier_override != null ? var.identifier_override : "${var.environment}-${var.project}-${var.identifier}"
     Environment = var.environment
     Project     = var.project
   }
@@ -13,7 +13,7 @@ locals {
 # -------
 
 resource "aws_db_subnet_group" "rds" {
-  name        = "${local.name}-subnet-group"
+  name        = var.subnet_group_name_override != null ? var.subnet_group_name_override : "${local.name}-subnet-group"
   subnet_ids  = var.subnet_ids
   description = "RDS subnet group for ${var.identifier}"
 

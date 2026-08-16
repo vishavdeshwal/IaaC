@@ -18,3 +18,15 @@ variable "igw_dependency" {
   type = string
 }
 
+variable "availability_mode" {
+  type        = string
+  default     = "subnet"
+  description = "NAT Gateway availability mode ('subnet' or 'regional')"
+}
+
+variable "name_override" {
+  type        = string
+  default     = null
+  description = "Optional name override for NAT Gateway"
+}
+

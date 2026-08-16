@@ -2,7 +2,7 @@ terraform {
   required_version = ">= 1.5.0"
   backend "s3" {
     bucket  = "fixxly-terraform-state-539109"
-    key     = "fixxly/preprod/terraform.tfstate"
+    key     = "fixxly/prod/terraform.tfstate"
     region  = "ap-south-1"
     encrypt = true
     profile = "fixxly"
@@ -21,7 +21,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      ENV     = "PRE-PROD"
+      ENV     = "PROD"
       Project = var.project
     }
   }
@@ -30,6 +30,8 @@ provider "aws" {
 data "aws_ssm_parameter" "ubuntu_ami" {
   name = "/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id"
 }
+
+data "aws_caller_identity" "current" {}
 
 // =============================================================
 // SECTION 1: NETWORKING (VPC, Subnets, IGW, NAT, Route Tables, SGs, ALB)
@@ -69,6 +71,8 @@ module "eip" {
 
 module "nat_gateway" {
   source            = "../../../../modules/aws/nat_gateway"
+  availability_mode = "regional"
+  name_override     = "prod-fixxly-regional-nat"
   public_subnet_id  = module.subnets.public_subnet_ids["public-1"]
   eip_allocation_id = module.eip.eip_allocation_id
   igw_dependency    = module.igw.igw_id
@@ -87,7 +91,7 @@ module "route_tables" {
   project            = var.project
 }
 
-# ----------- Security Groups -----------
+# ----------- Security Groups (Dedicated Workload Isolation) -----------
 
 module "bastion_sg" {
   source      = "../../../../modules/aws/security_groups"
@@ -152,10 +156,141 @@ module "alb_sg" {
   ]
 }
 
-module "app_sg" {
+# Dedicated SG for Web Frontend Next.js Service
+module "frontend_sg" {
   source      = "../../../../modules/aws/security_groups"
   vpc_id      = module.vpc.vpc_id
-  name        = "app-sg"
+  name        = "frontend-sg"
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 3000
+      to_port         = 3000
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow HTTP traffic from ALB to Frontend Next.js"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
+# Dedicated SG for Backend Microservices
+module "backend_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "backend-sg"
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 3000
+      to_port         = 3025
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow HTTP traffic from ALB to Backend Microservices"
+    },
+    {
+      from_port   = 3000
+      to_port     = 3025
+      protocol    = "tcp"
+      cidr_blocks = [var.vpc_cidr]
+      description = "Allow inter-service backend communication within VPC"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
+# Dedicated SG for Saleor E-Commerce Engine
+module "saleor_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "saleor-sg"
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 8000
+      to_port         = 8000
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow HTTP GraphQL traffic from ALB to Saleor"
+    },
+    {
+      from_port       = 80
+      to_port         = 80
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow HTTP traffic from ALB to Saleor Dashboard"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
+# Dedicated SG for Strapi Headless CMS
+module "strapi_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "strapi-sg"
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 1337
+      to_port         = 1337
+      protocol        = "tcp"
+      security_groups = [module.alb_sg.security_group_id]
+      description     = "Allow HTTP traffic from ALB to Strapi CMS"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
+# Dedicated SG for ERP EC2 Server
+module "erp_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "erp-sg"
   environment = var.environment
   project     = var.project
 
@@ -165,35 +300,7 @@ module "app_sg" {
       to_port         = 80
       protocol        = "tcp"
       security_groups = [module.alb_sg.security_group_id]
-      description     = "Allow HTTP traffic from ALB"
-    },
-    {
-      from_port       = 443
-      to_port         = 443
-      protocol        = "tcp"
-      security_groups = [module.alb_sg.security_group_id]
-      description     = "Allow HTTPS traffic from ALB"
-    },
-    {
-      from_port       = 3000
-      to_port         = 3000
-      protocol        = "tcp"
-      security_groups = [module.alb_sg.security_group_id]
-      description     = "Allow HTTP traffic from ALB"
-    },
-    {
-      from_port       = 1337
-      to_port         = 1337
-      protocol        = "tcp"
-      security_groups = [module.alb_sg.security_group_id]
-      description     = "Allow Strapi port from ALB"
-    },
-    {
-      from_port       = 8000
-      to_port         = 8000
-      protocol        = "tcp"
-      security_groups = [module.alb_sg.security_group_id]
-      description     = "Allow Saleor & ERP port from ALB"
+      description     = "Allow HTTP traffic from ALB to ERP Server"
     },
     {
       from_port       = 22
@@ -215,20 +322,24 @@ module "app_sg" {
   ]
 }
 
+# ----------- Database & Data Store Security Groups -----------
+
 module "db_sg" {
-  source      = "../../../../modules/aws/security_groups"
-  vpc_id      = module.vpc.vpc_id
-  name        = "db-sg"
-  environment = var.environment
-  project     = var.project
+  source        = "../../../../modules/aws/security_groups"
+  vpc_id        = module.vpc.vpc_id
+  name          = "db-sg"
+  name_override = "prod-erp-db"
+  description   = "Allow ERP-Prod- security group"
+  environment   = var.environment
+  project       = var.project
 
   ingress_rules = [
     {
       from_port       = 3306
       to_port         = 3306
       protocol        = "tcp"
-      security_groups = [module.app_sg.security_group_id]
-      description     = "Allow MariaDB access from App SG"
+      security_groups = [module.erp_sg.security_group_id]
+      description     = "Allow MariaDB access strictly from ERP SG"
     },
     {
       from_port       = 3306
@@ -262,8 +373,50 @@ module "postgres_sg" {
       from_port       = 5432
       to_port         = 5432
       protocol        = "tcp"
-      security_groups = [module.app_sg.security_group_id]
-      description     = "Allow PostgreSQL access from App SG (Strapi & Saleor)"
+      security_groups = [module.saleor_sg.security_group_id]
+      description     = "Allow PostgreSQL access strictly from Saleor SG"
+    },
+    {
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = [module.strapi_sg.security_group_id]
+      description     = "Allow PostgreSQL access strictly from Strapi SG"
+    },
+    {
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = [module.bastion_sg.security_group_id]
+      description     = "Allow PostgreSQL access from Bastion Host"
+    }
+  ]
+
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound traffic"
+    }
+  ]
+}
+
+module "backend_postgres_sg" {
+  source      = "../../../../modules/aws/security_groups"
+  vpc_id      = module.vpc.vpc_id
+  name        = "backend-postgres-sg"
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port       = 5432
+      to_port         = 5432
+      protocol        = "tcp"
+      security_groups = [module.backend_sg.security_group_id]
+      description     = "Allow PostgreSQL access strictly from Backend Microservices SG"
     },
     {
       from_port       = 5432
@@ -286,19 +439,28 @@ module "postgres_sg" {
 }
 
 module "redis_sg" {
-  source      = "../../../../modules/aws/security_groups"
-  vpc_id      = module.vpc.vpc_id
-  name        = "redis-sg"
-  environment = var.environment
-  project     = var.project
+  source        = "../../../../modules/aws/security_groups"
+  vpc_id        = module.vpc.vpc_id
+  name          = "redis-sg"
+  name_override = "prod-erp-cache-sg"
+  description   = "Allow traffic from erp-app"
+  environment   = var.environment
+  project       = var.project
 
   ingress_rules = [
     {
       from_port       = 6379
       to_port         = 6379
       protocol        = "tcp"
-      security_groups = [module.app_sg.security_group_id]
-      description     = "Allow Redis access from App SG"
+      security_groups = [module.saleor_sg.security_group_id]
+      description     = "Allow Redis access strictly from Saleor SG"
+    },
+    {
+      from_port       = 6379
+      to_port         = 6379
+      protocol        = "tcp"
+      security_groups = [module.backend_sg.security_group_id]
+      description     = "Allow Redis access strictly from Backend Microservices SG"
     }
   ]
 
@@ -325,15 +487,15 @@ module "msk_sg" {
       from_port       = 9092
       to_port         = 9092
       protocol        = "tcp"
-      security_groups = [module.app_sg.security_group_id]
-      description     = "Allow Plaintext Kafka traffic from App SG"
+      security_groups = [module.backend_sg.security_group_id]
+      description     = "Allow Plaintext Kafka port strictly from Backend Microservices SG"
     },
     {
       from_port       = 9094
       to_port         = 9094
       protocol        = "tcp"
-      security_groups = [module.app_sg.security_group_id]
-      description     = "Allow TLS Kafka traffic from App SG"
+      security_groups = [module.backend_sg.security_group_id]
+      description     = "Allow TLS Kafka port strictly from Backend Microservices SG"
     }
   ]
 
@@ -348,22 +510,21 @@ module "msk_sg" {
   ]
 }
 
-# ----------- ALB & Target Groups -----------
+# ----------- Target Groups & ALB -----------
 
-module "strapi_target_group" {
+module "target_group_erp" {
   source            = "../../../../modules/aws/target_group"
-  name              = "strapi"
-  port              = 1337
+  name              = "erp"
+  port              = 80
   protocol          = "HTTP"
-  target_type       = "ip"
+  target_type       = "instance"
   vpc_id            = module.vpc.vpc_id
-  health_check_path = "/_health"
-  health_check_matcher = "200-299"
+  health_check_path = "/"
   environment       = var.environment
   project           = var.project
 }
 
-module "saleor_target_group" {
+module "target_group_saleor" {
   source               = "../../../../modules/aws/target_group"
   name                 = "saleor"
   port                 = 8000
@@ -388,25 +549,18 @@ module "target_group_saleor_dashboard" {
   project           = var.project
 }
 
-module "target_group_erp" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "erp"
-  port              = 80
-  protocol          = "HTTP"
-  target_type       = "instance"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/"
-  environment       = var.environment
-  project           = var.project
+module "strapi_target_group" {
+  source               = "../../../../modules/aws/target_group"
+  name                 = "strapi"
+  port                 = 1337
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/_health"
+  health_check_matcher = "200-299"
+  environment          = var.environment
+  project              = var.project
 }
-
-resource "aws_lb_target_group_attachment" "erp" {
-  target_group_arn = module.target_group_erp.target_group_arn
-  target_id        = module.erp_server.instance_id
-  port             = 80
-}
-
-# --- Microservices & Frontend Target Groups ---
 
 module "target_group_frontend" {
   source            = "../../../../modules/aws/target_group"
@@ -432,30 +586,6 @@ module "target_group_bff" {
   project           = var.project
 }
 
-module "target_group_payment" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "payment"
-  port              = var.payment_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
-}
-
-module "target_group_erp_sync" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "erpsync"
-  port              = var.erp_sync_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
-}
-
 module "target_group_product" {
   source            = "../../../../modules/aws/target_group"
   name              = "product"
@@ -468,10 +598,10 @@ module "target_group_product" {
   project           = var.project
 }
 
-module "target_group_inventory" {
+module "target_group_order" {
   source            = "../../../../modules/aws/target_group"
-  name              = "inventory"
-  port              = var.inventory_service_port
+  name              = "order"
+  port              = var.order_service_port
   protocol          = "HTTP"
   target_type       = "ip"
   vpc_id            = module.vpc.vpc_id
@@ -492,10 +622,46 @@ module "target_group_cart" {
   project           = var.project
 }
 
+module "target_group_inventory" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "inventory"
+  port              = var.inventory_service_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
 module "target_group_coupon" {
   source            = "../../../../modules/aws/target_group"
   name              = "coupon"
   port              = var.coupon_service_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
+module "target_group_payment" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "payment"
+  port              = var.payment_service_port
+  protocol          = "HTTP"
+  target_type       = "ip"
+  vpc_id            = module.vpc.vpc_id
+  health_check_path = "/health"
+  environment       = var.environment
+  project           = var.project
+}
+
+module "target_group_erp_sync" {
+  source            = "../../../../modules/aws/target_group"
+  name              = "erpsync"
+  port              = var.erp_sync_service_port
   protocol          = "HTTP"
   target_type       = "ip"
   vpc_id            = module.vpc.vpc_id
@@ -540,7 +706,7 @@ resource "aws_lb_listener_rule" "frontend_rule" {
 
   condition {
     host_header {
-      values = ["fe-preprod.fixxly.in"]
+      values = ["fe.fixxly.in"]
     }
   }
 }
@@ -556,7 +722,7 @@ resource "aws_lb_listener_rule" "strapi_rule" {
 
   condition {
     host_header {
-      values = ["cms-preprod.fixxly.in"]
+      values = ["cms.fixxly.in"]
     }
   }
 }
@@ -567,12 +733,12 @@ resource "aws_lb_listener_rule" "saleor_rule" {
 
   action {
     type             = "forward"
-    target_group_arn = module.saleor_target_group.target_group_arn
+    target_group_arn = module.target_group_saleor.target_group_arn
   }
 
   condition {
     host_header {
-      values = ["saleor-preprod.fixxly.in"]
+      values = ["saleor.fixxly.in"]
     }
   }
 
@@ -594,7 +760,7 @@ resource "aws_lb_listener_rule" "saleor_dashboard_rule" {
 
   condition {
     host_header {
-      values = ["saleor-preprod.fixxly.in"]
+      values = ["saleor.fixxly.in"]
     }
   }
 }
@@ -610,12 +776,12 @@ resource "aws_lb_listener_rule" "erp_rule" {
 
   condition {
     host_header {
-      values = ["erp-preprod.fixxly.in"]
+      values = ["erp.fixxly.in"]
     }
   }
 }
 
-# --- api-preprod.fixxly.in Path-Based Rules ---
+# --- api.fixxly.in Path-Based Rules ---
 
 resource "aws_lb_listener_rule" "payment_rule" {
   listener_arn = module.alb.https_listener_arn
@@ -628,7 +794,7 @@ resource "aws_lb_listener_rule" "payment_rule" {
 
   condition {
     host_header {
-      values = ["api-preprod.fixxly.in"]
+      values = ["api.fixxly.in"]
     }
   }
 
@@ -650,7 +816,7 @@ resource "aws_lb_listener_rule" "erp_sync_rule" {
 
   condition {
     host_header {
-      values = ["api-preprod.fixxly.in"]
+      values = ["api.fixxly.in"]
     }
   }
 
@@ -672,7 +838,7 @@ resource "aws_lb_listener_rule" "product_rule" {
 
   condition {
     host_header {
-      values = ["api-preprod.fixxly.in"]
+      values = ["api.fixxly.in"]
     }
   }
 
@@ -694,7 +860,7 @@ resource "aws_lb_listener_rule" "inventory_rule" {
 
   condition {
     host_header {
-      values = ["api-preprod.fixxly.in"]
+      values = ["api.fixxly.in"]
     }
   }
 
@@ -716,7 +882,7 @@ resource "aws_lb_listener_rule" "cart_rule" {
 
   condition {
     host_header {
-      values = ["api-preprod.fixxly.in"]
+      values = ["api.fixxly.in"]
     }
   }
 
@@ -738,7 +904,7 @@ resource "aws_lb_listener_rule" "coupon_rule" {
 
   condition {
     host_header {
-      values = ["api-preprod.fixxly.in"]
+      values = ["api.fixxly.in"]
     }
   }
 
@@ -760,13 +926,35 @@ resource "aws_lb_listener_rule" "serviceability_rule" {
 
   condition {
     host_header {
-      values = ["api-preprod.fixxly.in"]
+      values = ["api.fixxly.in"]
     }
   }
 
   condition {
     path_pattern {
       values = ["/api/v1/admin/serviceability*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "order_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 80
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_order.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/orders/*"]
     }
   }
 }
@@ -782,13 +970,13 @@ resource "aws_lb_listener_rule" "bff_rule" {
 
   condition {
     host_header {
-      values = ["api-preprod.fixxly.in"]
+      values = ["api.fixxly.in"]
     }
   }
 }
 
 // =============================================================
-// SECTION 2: COMPUTE (Bastion Host, ERP Server, ECR, ECS Cluster & Microservices)
+// SECTION 2: COMPUTING (Bastion Host, ERP Server, Amazon ECR & Amazon MSK)
 // =============================================================
 
 # ----------- IAM Role & Instance Profile for EC2 SSM Access -----------
@@ -822,20 +1010,21 @@ resource "aws_iam_instance_profile" "ssm_profile" {
   role = module.ec2_ssm_role.role_name
 }
 
-# ----------- Bastion Host -----------
+# ----------- Bastion Host (Public Subnet - Imported Existing Prod Bastion) -----------
 
 module "bastion_host" {
-  source               = "../../../../modules/aws/ec2"
-  name                 = "bastion"
-  ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
-  instance_type        = "t3.micro"
-  subnet_id            = module.subnets.public_subnet_ids["public-1"]
-  security_group_ids   = [module.bastion_sg.security_group_id]
-  key_name             = var.ec2_key_name != "" ? var.ec2_key_name : null
-  iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
-  associate_public_ip  = true
-  root_volume_size     = 20
-  root_volume_type     = "gp3"
+  source                = "../../../../modules/aws/ec2"
+  name                  = "bastion"
+  ami_id                = "ami-01a00762f46d584a1"
+  instance_type         = "t3.micro"
+  subnet_id             = "subnet-0ec8b910509dbb8d7"
+  security_group_ids    = [module.bastion_sg.security_group_id]
+  key_name              = var.ec2_key_name != "" ? var.ec2_key_name : null
+  iam_instance_profile  = aws_iam_instance_profile.ssm_profile.name
+  associate_public_ip   = true
+  root_volume_size      = 50
+  root_volume_type      = "gp3"
+  root_volume_encrypted = false
 
   environment = var.environment
   project     = var.project
@@ -849,26 +1038,33 @@ module "bastion_eip" {
   project     = var.project
 }
 
-# ----------- ERP Server (Private Subnet) -----------
+# ----------- ERP Server (Private Subnet - Imported Existing Prod ERP) -----------
 
 module "erp_server" {
-  source               = "../../../../modules/aws/ec2"
-  name                 = "erp"
-  ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
-  instance_type        = "t3.medium"
-  subnet_id            = module.subnets.private_subnet_ids["app-1"]
-  security_group_ids   = [module.app_sg.security_group_id]
-  key_name             = var.ec2_key_name != "" ? var.ec2_key_name : null
-  iam_instance_profile = aws_iam_instance_profile.ssm_profile.name
-  associate_public_ip  = false
-  root_volume_size     = 50
-  root_volume_type     = "gp3"
+  source                = "../../../../modules/aws/ec2"
+  name                  = "erp"
+  ami_id                = "ami-01a00762f46d584a1"
+  instance_type         = "t3.xlarge"
+  subnet_id             = "subnet-0b2545dbcafc711bb"
+  security_group_ids    = [module.erp_sg.security_group_id]
+  key_name              = var.ec2_key_name != "" ? var.ec2_key_name : null
+  iam_instance_profile  = aws_iam_instance_profile.ssm_profile.name
+  associate_public_ip   = false
+  root_volume_size      = 50
+  root_volume_type      = "gp3"
+  root_volume_encrypted = false
 
   environment = var.environment
   project     = var.project
 }
 
-# ----------- ECR Repositories -----------
+resource "aws_lb_target_group_attachment" "erp" {
+  target_group_arn = module.target_group_erp.target_group_arn
+  target_id        = module.erp_server.instance_id
+  port             = 80
+}
+
+# ----------- Amazon ECR Repositories (18 Repositories) -----------
 
 module "ecr_saleor" {
   source      = "../../../../modules/aws/ecr"
@@ -996,23 +1192,66 @@ module "ecr_serviceability_service" {
   project     = var.project
 }
 
-# ----------- ECS Cluster & Microservices -----------
+# ----------- Amazon MSK Managed Kafka Cluster -----------
 
-module "ecs_cluster" {
-  source       = "../../../../modules/aws/ecs_cluster"
-  cluster_name = "${var.environment}-${var.project}-cluster"
-  environment  = var.environment
-  project      = var.project
+module "msk" {
+  source             = "../../../../modules/aws/msk"
+  cluster_name       = "${var.environment}-${var.project}-msk"
+  kafka_version      = "3.9.x"
+  number_of_nodes    = 2
+  instance_type      = "kafka.m5.large"
+  ebs_volume_size    = 50
+  client_subnets     = [module.subnets.private_subnet_ids["app-1"], module.subnets.private_subnet_ids["app-2"]]
+  security_group_ids = [module.msk_sg.security_group_id]
+  environment        = var.environment
+  project            = var.project
 }
 
-# AWS Cloud Map Private DNS Namespace for Service Discovery
+# ----------- AWS Secrets Manager -----------
+
+module "backend_secrets" {
+  source        = "../../../../modules/aws/secrets_manager"
+  secret_name   = "${var.environment}-${var.project}-backend-secrets"
+  secret_string = jsonencode(var.backend_secrets)
+  environment   = var.environment
+  project       = var.project
+}
+
+module "saleor_secrets" {
+  source        = "../../../../modules/aws/secrets_manager"
+  secret_name   = "${var.environment}-${var.project}-saleor-secrets"
+  secret_string = jsonencode(var.saleor_secrets)
+  environment   = var.environment
+  project       = var.project
+}
+
+module "strapi_secrets" {
+  source        = "../../../../modules/aws/secrets_manager"
+  secret_name   = "${var.environment}-${var.project}-strapi-secrets"
+  secret_string = jsonencode(var.strapi_secrets)
+  environment   = var.environment
+  project       = var.project
+}
+
+# ----------- S3 Public Media Bucket -----------
+
+module "s3_media" {
+  source      = "../../../../modules/aws/s3"
+  bucket_name = "${var.environment}-${var.project}-saleor-strapi-media"
+  environment = var.environment
+  project     = var.project
+}
+
+# ----------- AWS Cloud Map Private DNS Namespace -----------
+
 resource "aws_service_discovery_private_dns_namespace" "internal" {
   name        = "${var.environment}.${var.project}.internal"
   description = "Private Service Discovery DNS Namespace for ${var.environment}-${var.project} Microservices"
   vpc         = module.vpc.vpc_id
 }
 
-# Dedicated Backend IAM Execution & Task Roles
+# ----------- Service-Isolated IAM Execution & Task Roles -----------
+
 module "ecs_backend_execution_role" {
   source = "../../../../modules/aws/iam_role"
   name   = "${var.environment}-${var.project}-ecs-backend-exec-role"
@@ -1052,7 +1291,10 @@ resource "aws_iam_role_policy" "ecs_backend_cloudwatch_exec_policy" {
           "logs:PutLogEvents",
           "logs:DescribeLogStreams"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.environment}-${var.project}-*",
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.environment}-${var.project}-*:*"
+        ]
       }
     ]
   })
@@ -1121,7 +1363,6 @@ resource "aws_iam_role_policy" "ecs_backend_secretsmanager_task_policy" {
   })
 }
 
-# Dedicated Frontend IAM Execution & Task Roles
 module "ecs_frontend_execution_role" {
   source = "../../../../modules/aws/iam_role"
   name   = "${var.environment}-${var.project}-ecs-frontend-exec-role"
@@ -1161,7 +1402,10 @@ resource "aws_iam_role_policy" "ecs_frontend_cloudwatch_exec_policy" {
           "logs:PutLogEvents",
           "logs:DescribeLogStreams"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.environment}-${var.project}-frontend",
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.environment}-${var.project}-frontend:*"
+        ]
       }
     ]
   })
@@ -1186,7 +1430,6 @@ module "ecs_frontend_task_role" {
   project     = var.project
 }
 
-# Dedicated Saleor IAM Execution & Task Roles
 module "ecs_saleor_execution_role" {
   source = "../../../../modules/aws/iam_role"
   name   = "${var.environment}-${var.project}-ecs-saleor-exec-role"
@@ -1226,7 +1469,10 @@ resource "aws_iam_role_policy" "ecs_saleor_cloudwatch_exec_policy" {
           "logs:PutLogEvents",
           "logs:DescribeLogStreams"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.environment}-${var.project}-saleor*",
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.environment}-${var.project}-saleor*:*"
+        ]
       }
     ]
   })
@@ -1246,7 +1492,8 @@ resource "aws_iam_role_policy" "ecs_saleor_secretsmanager_exec_policy" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          module.saleor_secrets.secret_arn
+          module.saleor_secrets.secret_arn,
+          "${module.saleor_secrets.secret_arn}:*"
         ]
       }
     ]
@@ -1286,14 +1533,38 @@ resource "aws_iam_role_policy" "ecs_saleor_secretsmanager_task_policy" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          module.saleor_secrets.secret_arn
+          module.saleor_secrets.secret_arn,
+          "${module.saleor_secrets.secret_arn}:*"
         ]
       }
     ]
   })
 }
 
-# Dedicated Strapi IAM Execution & Task Roles
+resource "aws_iam_role_policy" "ecs_saleor_s3_task_policy" {
+  name = "${var.environment}-${var.project}-ecs-saleor-s3-task-policy"
+  role = module.ecs_saleor_task_role.role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          module.s3_media.bucket_arn,
+          "${module.s3_media.bucket_arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
 module "ecs_strapi_execution_role" {
   source = "../../../../modules/aws/iam_role"
   name   = "${var.environment}-${var.project}-ecs-strapi-exec-role"
@@ -1333,7 +1604,10 @@ resource "aws_iam_role_policy" "ecs_strapi_cloudwatch_exec_policy" {
           "logs:PutLogEvents",
           "logs:DescribeLogStreams"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.environment}-${var.project}-strapi",
+          "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/ecs/${var.environment}-${var.project}-strapi:*"
+        ]
       }
     ]
   })
@@ -1353,7 +1627,8 @@ resource "aws_iam_role_policy" "ecs_strapi_secretsmanager_exec_policy" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          module.strapi_secrets.secret_arn
+          module.strapi_secrets.secret_arn,
+          "${module.strapi_secrets.secret_arn}:*"
         ]
       }
     ]
@@ -1393,60 +1668,16 @@ resource "aws_iam_role_policy" "ecs_strapi_secretsmanager_task_policy" {
           "secretsmanager:DescribeSecret"
         ]
         Resource = [
-          module.strapi_secrets.secret_arn
+          module.strapi_secrets.secret_arn,
+          "${module.strapi_secrets.secret_arn}:*"
         ]
       }
     ]
   })
 }
 
-# ----------- Public S3 Media Bucket for Saleor & Strapi -----------
-
-module "s3_media" {
-  source                     = "../../../../modules/aws/s3"
-  bucket_name                = "${var.environment}-${var.project}-saleor-strapi-media"
-  enable_public_read         = true
-  manage_public_access_block = true
-  block_public_acls          = false
-  block_public_policy        = false
-  ignore_public_acls         = false
-  restrict_public_buckets    = false
-  enable_cors                = true
-  environment                = var.environment
-  project                    = var.project
-}
-
-resource "aws_iam_role_policy" "ecs_saleor_task_s3_policy" {
-  name = "${var.environment}-${var.project}-ecs-saleor-task-s3-policy"
-  role = module.ecs_saleor_task_role.role_name
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:ListBucket",
-          "s3:GetBucketLocation"
-        ]
-        Resource = module.s3_media.bucket_arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:DeleteObject",
-          "s3:PutObjectAcl"
-        ]
-        Resource = "${module.s3_media.bucket_arn}/*"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy" "ecs_strapi_task_s3_policy" {
-  name = "${var.environment}-${var.project}-ecs-strapi-task-s3-policy"
+resource "aws_iam_role_policy" "ecs_strapi_s3_task_policy" {
+  name = "${var.environment}-${var.project}-ecs-strapi-s3-task-policy"
   role = module.ecs_strapi_task_role.role_name
 
   policy = jsonencode({
@@ -1455,61 +1686,59 @@ resource "aws_iam_role_policy" "ecs_strapi_task_s3_policy" {
       {
         Effect = "Allow"
         Action = [
-          "s3:ListBucket",
-          "s3:GetBucketLocation"
-        ]
-        Resource = module.s3_media.bucket_arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
           "s3:PutObject",
           "s3:GetObject",
           "s3:DeleteObject",
-          "s3:PutObjectAcl"
+          "s3:ListBucket"
         ]
-        Resource = "${module.s3_media.bucket_arn}/*"
+        Resource = [
+          module.s3_media.bucket_arn,
+          "${module.s3_media.bucket_arn}/*"
+        ]
       }
     ]
   })
 }
 
-locals {
-  saleor_container_secrets = [for k, v in var.saleor_secrets : { name = k, valueFrom = "${module.saleor_secrets.secret_arn}:${k}::" }]
-  saleor_container_env = concat(
-    [for k, v in var.saleor_env_vars : { name = k, value = v }]
-  )
+# ----------- Amazon ECS Cluster -----------
+
+module "ecs_cluster" {
+  source       = "../../../../modules/aws/ecs_cluster"
+  cluster_name = "${var.environment}-${var.project}-cluster"
+  environment  = var.environment
+  project      = var.project
 }
 
-# 1. Saleor API Service
+# ----------- ECS Fargate Services -----------
+
 module "ecs_saleor_api" {
   source                            = "../../../../modules/aws/ecs_service"
-  enable_execute_command            = true
   service_name                      = "${var.environment}-${var.project}-saleor-api"
   family                            = "${var.environment}-${var.project}-saleor-api-task"
   cluster_arn                       = module.ecs_cluster.cluster_arn
   execution_role_arn                = module.ecs_saleor_execution_role.role_arn
   task_role_arn                     = module.ecs_saleor_task_role.role_arn
   health_check_grace_period_seconds = 300
-  cpu                               = "512"
-  memory                 = "1024"
-  launch_type            = "FARGATE"
-  environment            = var.environment
-  project                = var.project
+  cpu                               = "1024"
+  memory                            = "2048"
+  launch_type                       = "FARGATE"
+  environment                       = var.environment
+  project                           = var.project
+  desired_count                     = 1
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.saleor_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
-  target_group_arn = module.saleor_target_group.target_group_arn
+  target_group_arn = module.target_group_saleor.target_group_arn
   container_name   = "saleor-api"
   container_port   = 8000
 
   container_definitions = jsonencode([
     {
       name      = "saleor-api"
-      image     = "${module.ecr_saleor.repository_url}:latest"
+      image     = "ghcr.io/saleor/saleor:3.20"
       essential = true
       portMappings = [
         {
@@ -1517,6 +1746,17 @@ module "ecs_saleor_api" {
           protocol      = "tcp"
         }
       ]
+      environment = concat(
+        [
+          { name = "DATABASE_URL", value = "postgres://${var.postgres_master_user_name}:${var.postgres_master_user_pass}@${module.rds_postgres.endpoint}/fixxlypostgres" },
+          { name = "REDIS_URL", value = "rediss://${module.elasticache_redis.redis_primary_endpoint}:6379" },
+          { name = "DEFAULT_FROM_EMAIL", value = "noreply@fixxly.in" },
+          { name = "AWS_MEDIA_BUCKET_NAME", value = module.s3_media.bucket_name },
+          { name = "AWS_MEDIA_CUSTOM_DOMAIN", value = module.s3_media.bucket_regional_domain_name }
+        ],
+        [for k, v in var.saleor_env_vars : { name = k, value = v }]
+      )
+      secrets = [for k, v in var.saleor_secrets : { name = k, valueFrom = "${module.saleor_secrets.secret_arn}:${k}::" }]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -1526,29 +1766,26 @@ module "ecs_saleor_api" {
           "awslogs-group"         = "/ecs/${var.environment}-${var.project}-saleor-api"
         }
       }
-      environment = local.saleor_container_env
-      secrets     = local.saleor_container_secrets
     }
   ])
 }
 
-# 2. Saleor Worker Service (Celery Worker)
 module "ecs_saleor_worker" {
-  source             = "../../../../modules/aws/ecs_service"
-  platform_version   = "1.4.0"
-  service_name       = "${var.environment}-${var.project}-saleor-worker"
-  family             = "${var.environment}-${var.project}-saleor-worker-task"
-  cluster_arn        = module.ecs_cluster.cluster_arn
-  execution_role_arn = module.ecs_saleor_execution_role.role_arn
-  task_role_arn      = module.ecs_saleor_task_role.role_arn
-  cpu                = "512"
-  memory             = "1024"
-  launch_type        = "FARGATE"
-  environment        = var.environment
-  project            = var.project
-  desired_count      = 1
+  source                            = "../../../../modules/aws/ecs_service"
+  service_name                      = "${var.environment}-${var.project}-saleor-worker"
+  family                            = "${var.environment}-${var.project}-saleor-worker-task"
+  cluster_arn                       = module.ecs_cluster.cluster_arn
+  execution_role_arn                = module.ecs_saleor_execution_role.role_arn
+  task_role_arn                     = module.ecs_saleor_task_role.role_arn
+  health_check_grace_period_seconds = null
+  cpu                               = "512"
+  memory                            = "1024"
+  launch_type                       = "FARGATE"
+  environment                       = var.environment
+  project                           = var.project
+  desired_count                     = 1
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.saleor_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
@@ -1557,9 +1794,18 @@ module "ecs_saleor_worker" {
   container_definitions = jsonencode([
     {
       name      = "saleor-worker"
-      image     = "${module.ecr_saleor.repository_url}:latest"
-      command   = ["celery", "--app", "saleor.celeryconf:app", "worker", "-E", "--loglevel=info"]
+      image     = "ghcr.io/saleor/saleor:3.20"
       essential = true
+      command   = ["celery", "-A", "saleor", "worker", "--loglevel=info"]
+      environment = concat(
+        [
+          { name = "DATABASE_URL", value = "postgres://${var.postgres_master_user_name}:${var.postgres_master_user_pass}@${module.rds_postgres.endpoint}/fixxlypostgres" },
+          { name = "REDIS_URL", value = "rediss://${module.elasticache_redis.redis_primary_endpoint}:6379" },
+          { name = "AWS_MEDIA_BUCKET_NAME", value = module.s3_media.bucket_name }
+        ],
+        [for k, v in var.saleor_env_vars : { name = k, value = v }]
+      )
+      secrets = [for k, v in var.saleor_secrets : { name = k, valueFrom = "${module.saleor_secrets.secret_arn}:${k}::" }]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -1569,32 +1815,26 @@ module "ecs_saleor_worker" {
           "awslogs-group"         = "/ecs/${var.environment}-${var.project}-saleor-worker"
         }
       }
-      environment = local.saleor_container_env
-      secrets     = local.saleor_container_secrets
     }
   ])
 }
 
-# 3. Saleor Beat Service (Celery Scheduler)
 module "ecs_saleor_beat" {
-  source             = "../../../../modules/aws/ecs_service"
-  service_name       = "${var.environment}-${var.project}-saleor-beat"
-  family             = "${var.environment}-${var.project}-saleor-beat-task"
-  cluster_arn        = module.ecs_cluster.cluster_arn
-  execution_role_arn = module.ecs_saleor_execution_role.role_arn
-  task_role_arn      = module.ecs_saleor_task_role.role_arn
-  cpu                = "512"
-  memory             = "1024"
-  launch_type        = "FARGATE"
-  environment        = var.environment
-  project            = var.project
-  desired_count      = 1
+  source                            = "../../../../modules/aws/ecs_service"
+  service_name                      = "${var.environment}-${var.project}-saleor-beat"
+  family                            = "${var.environment}-${var.project}-saleor-beat-task"
+  cluster_arn                       = module.ecs_cluster.cluster_arn
+  execution_role_arn                = module.ecs_saleor_execution_role.role_arn
+  task_role_arn                     = module.ecs_saleor_task_role.role_arn
+  health_check_grace_period_seconds = null
+  cpu                               = "256"
+  memory                            = "512"
+  launch_type                       = "FARGATE"
+  environment                       = var.environment
+  project                           = var.project
+  desired_count                     = 1
 
-  deployment_maximum_percent         = 100
-  deployment_minimum_healthy_percent = 0
-  availability_zone_rebalancing      = "DISABLED"
-
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.saleor_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
@@ -1603,9 +1843,17 @@ module "ecs_saleor_beat" {
   container_definitions = jsonencode([
     {
       name      = "saleor-beat"
-      image     = "${module.ecr_saleor.repository_url}:latest"
-      command   = ["celery", "--app", "saleor.celeryconf:app", "beat", "--scheduler", "saleor.schedulers.schedulers.DatabaseScheduler"]
+      image     = "ghcr.io/saleor/saleor:3.20"
       essential = true
+      command   = ["celery", "-A", "saleor", "beat", "--loglevel=info"]
+      environment = concat(
+        [
+          { name = "DATABASE_URL", value = "postgres://${var.postgres_master_user_name}:${var.postgres_master_user_pass}@${module.rds_postgres.endpoint}/fixxlypostgres" },
+          { name = "REDIS_URL", value = "rediss://${module.elasticache_redis.redis_primary_endpoint}:6379" }
+        ],
+        [for k, v in var.saleor_env_vars : { name = k, value = v }]
+      )
+      secrets = [for k, v in var.saleor_secrets : { name = k, valueFrom = "${module.saleor_secrets.secret_arn}:${k}::" }]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -1615,13 +1863,10 @@ module "ecs_saleor_beat" {
           "awslogs-group"         = "/ecs/${var.environment}-${var.project}-saleor-beat"
         }
       }
-      environment = local.saleor_container_env
-      secrets     = local.saleor_container_secrets
     }
   ])
 }
 
-# 4. Saleor Dashboard Service
 module "ecs_saleor_dashboard" {
   source                            = "../../../../modules/aws/ecs_service"
   service_name                      = "${var.environment}-${var.project}-saleor-dashboard"
@@ -1637,7 +1882,7 @@ module "ecs_saleor_dashboard" {
   project                           = var.project
   desired_count                     = 1
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.saleor_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
@@ -1670,7 +1915,6 @@ module "ecs_saleor_dashboard" {
   ])
 }
 
-# 5. Strapi Service
 module "ecs_strapi" {
   source                            = "../../../../modules/aws/ecs_service"
   service_name                      = "${var.environment}-${var.project}-strapi"
@@ -1680,13 +1924,13 @@ module "ecs_strapi" {
   task_role_arn                     = module.ecs_strapi_task_role.role_arn
   health_check_grace_period_seconds = 300
   cpu                               = "512"
-  memory             = "1024"
-  launch_type        = "FARGATE"
-  environment        = var.environment
-  project            = var.project
-  desired_count      = 1
+  memory                            = "1024"
+  launch_type                       = "FARGATE"
+  environment                       = var.environment
+  project                           = var.project
+  desired_count                     = 1
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.strapi_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
@@ -1719,133 +1963,6 @@ module "ecs_strapi" {
   ])
 }
 
-// =============================================================
-// SECTION 3: DATABASE & CACHE (RDS MariaDB, RDS PostgreSQL, ElastiCache Redis)
-// =============================================================
-
-# ----------- RDS MariaDB -----------
-
-module "rds_mariadb" {
-  source             = "../../../../modules/aws/rds"
-  identifier         = "mariadb"
-  engine             = "mariadb"
-  engine_version     = var.mariadb_engine_version
-  instance_class     = "db.m5.xlarge"
-  allocated_storage  = 100
-  storage_type       = "gp3"
-  db_name            = "fixxlydb"
-  username           = var.master_db_user_name
-  password           = var.master_db_user_pass
-  subnet_ids         = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
-  security_group_ids = [module.db_sg.security_group_id]
-
-  environment = var.environment
-  project     = var.project
-}
-
-# ----------- RDS PostgreSQL (for Saleor & Strapi) -----------
-
-module "rds_postgres" {
-  source             = "../../../../modules/aws/rds"
-  identifier         = "saleor-strapi"
-  engine             = "postgres"
-  engine_version     = var.postgres_engine_version
-  instance_class     = "db.m5.large"
-  allocated_storage  = 100
-  storage_type       = "gp3"
-  db_name            = "fixxlypostgres"
-  username           = var.postgres_master_user_name
-  password           = var.postgres_master_user_pass
-  subnet_ids         = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
-  security_group_ids = [module.postgres_sg.security_group_id]
-
-  environment = var.environment
-  project     = var.project
-}
-
-# ----------- RDS PostgreSQL (Dedicated for Backend Microservices) -----------
-
-module "rds_backend_postgres" {
-  source             = "../../../../modules/aws/rds"
-  identifier         = "backend-postgres"
-  engine             = "postgres"
-  engine_version     = var.postgres_engine_version
-  instance_class     = "db.m5.xlarge"
-  allocated_storage  = 100
-  storage_type       = "gp3"
-  db_name            = "fixxlybackend"
-  username           = var.backend_postgres_master_user_name
-  password           = var.backend_postgres_master_user_pass
-  subnet_ids         = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
-  security_group_ids = [module.postgres_sg.security_group_id]
-
-  environment = var.environment
-  project     = var.project
-}
-
-# ----------- ElastiCache Redis -----------
-
-module "elasticache_redis" {
-  source             = "../../../../modules/aws/elasticache"
-  name               = "redis"
-  engine             = "redis"
-  engine_version     = "7.0"
-  node_type          = "cache.t4g.micro"
-  subnet_ids         = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
-  security_group_ids = [module.redis_sg.security_group_id]
-
-  environment = var.environment
-  project     = var.project
-}
-
-# ----------- Amazon MSK Managed Kafka Cluster -----------
-
-module "msk" {
-  source             = "../../../../modules/aws/msk"
-  cluster_name       = "${var.environment}-${var.project}-msk"
-  kafka_version      = "3.9.x"
-  number_of_nodes    = 2
-  instance_type      = "kafka.t3.small"
-  ebs_volume_size    = 20
-  client_subnets     = [module.subnets.private_subnet_ids["app-1"], module.subnets.private_subnet_ids["app-2"]]
-  security_group_ids = [module.msk_sg.security_group_id]
-  environment        = var.environment
-  project            = var.project
-}
-
-// =============================================================
-// SECTION 4: SECURITY & SECRETS MANAGER
-// =============================================================
-
-module "backend_secrets" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}-${var.project}-backend-secrets"
-  secret_string = jsonencode(var.backend_secrets)
-  environment   = var.environment
-  project       = var.project
-}
-
-module "saleor_secrets" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}-${var.project}-saleor-secrets"
-  secret_string = jsonencode(var.saleor_secrets)
-  environment   = var.environment
-  project       = var.project
-}
-
-module "strapi_secrets" {
-  source        = "../../../../modules/aws/secrets_manager"
-  secret_name   = "${var.environment}-${var.project}-strapi-secrets"
-  secret_string = jsonencode(var.strapi_secrets)
-  environment   = var.environment
-  project       = var.project
-}
-
-# =============================================================
-# SECTION 5: KAFKA, WEB FRONTEND & BACKEND MICROSERVICES ECS SERVICES
-# =============================================================
-
-# --- 1. Web Frontend Service ---
 module "ecs_frontend" {
   source                            = "../../../../modules/aws/ecs_service"
   service_name                      = "${var.environment}-${var.project}-frontend"
@@ -1859,15 +1976,17 @@ module "ecs_frontend" {
   launch_type                       = "FARGATE"
   environment                       = var.environment
   project                           = var.project
-  container_name                    = "frontend"
-  container_port                    = var.frontend_port
-  target_group_arn                  = module.target_group_frontend.target_group_arn
+  desired_count                     = 1
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.frontend_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
+
+  container_name   = "frontend"
+  container_port   = var.frontend_port
+  target_group_arn = module.target_group_frontend.target_group_arn
 
   container_definitions = jsonencode([
     {
@@ -1901,22 +2020,22 @@ locals {
   )
   backend_common_env = concat(
     [
-      { name = "NODE_ENV", value = "staging" },
+      { name = "NODE_ENV", value = "production" },
       { name = "REDIS_URL", value = "rediss://${module.elasticache_redis.redis_primary_endpoint}:6379" },
       { name = "KAFKA_BROKERS", value = module.msk.bootstrap_brokers_plaintext },
-      { name = "AUTH_BASE_URL", value = "http://auth-service.preprod.fixxly.internal:3001" },
-      { name = "PRODUCT_BASE_URL", value = "http://product-service.preprod.fixxly.internal:3003" },
-      { name = "ORDER_BASE_URL", value = "http://order-service.preprod.fixxly.internal:3004" },
-      { name = "CART_BASE_URL", value = "http://cart-service.preprod.fixxly.internal:3005" },
-      { name = "INVENTORY_BASE_URL", value = "http://inventory-service.preprod.fixxly.internal:3006" },
-      { name = "CMS_BASE_URL", value = "http://cms-bridge.preprod.fixxly.internal:3007" },
-      { name = "COUPON_BASE_URL", value = "http://coupon-service.preprod.fixxly.internal:3008" },
-      { name = "NOTIFICATION_BASE_URL", value = "http://notification-service.preprod.fixxly.internal:3009" },
-      { name = "PAYMENT_BASE_URL", value = "http://payment-service.preprod.fixxly.internal:3010" },
-      { name = "ERP_SYNC_BASE_URL", value = "http://erp-sync-service.preprod.fixxly.internal:3011" },
-      { name = "WALLET_BASE_URL", value = "http://wallet-service.preprod.fixxly.internal:3012" },
-      { name = "ASSETS_BASE_URL", value = "http://assets-service.preprod.fixxly.internal:3013" },
-      { name = "SERVICEABILITY_BASE_URL", value = "http://serviceability-service.preprod.fixxly.internal:3014" }
+      { name = "AUTH_BASE_URL", value = "http://auth-service.${var.environment}.${var.project}.internal:3001" },
+      { name = "PRODUCT_BASE_URL", value = "http://product-service.${var.environment}.${var.project}.internal:3003" },
+      { name = "ORDER_BASE_URL", value = "http://order-service.${var.environment}.${var.project}.internal:3004" },
+      { name = "CART_BASE_URL", value = "http://cart-service.${var.environment}.${var.project}.internal:3005" },
+      { name = "INVENTORY_BASE_URL", value = "http://inventory-service.${var.environment}.${var.project}.internal:3006" },
+      { name = "CMS_BASE_URL", value = "http://cms-bridge.${var.environment}.${var.project}.internal:3007" },
+      { name = "COUPON_BASE_URL", value = "http://coupon-service.${var.environment}.${var.project}.internal:3008" },
+      { name = "NOTIFICATION_BASE_URL", value = "http://notification-service.${var.environment}.${var.project}.internal:3009" },
+      { name = "PAYMENT_BASE_URL", value = "http://payment-service.${var.environment}.${var.project}.internal:3010" },
+      { name = "ERP_SYNC_BASE_URL", value = "http://erp-sync-service.${var.environment}.${var.project}.internal:3011" },
+      { name = "WALLET_BASE_URL", value = "http://wallet-service.${var.environment}.${var.project}.internal:3012" },
+      { name = "ASSETS_BASE_URL", value = "http://assets-service.${var.environment}.${var.project}.internal:3013" },
+      { name = "SERVICEABILITY_BASE_URL", value = "http://serviceability-service.${var.environment}.${var.project}.internal:3014" }
     ],
     [for k, v in var.backend_env_vars : { name = k, value = v }]
   )
@@ -1940,7 +2059,7 @@ locals {
     "order-service" = {
       port             = var.order_service_port
       ecr_url          = module.ecr_order_service.repository_url
-      target_group_arn = null
+      target_group_arn = module.target_group_order.target_group_arn
     }
     "cart-service" = {
       port             = var.cart_service_port
@@ -1995,7 +2114,6 @@ locals {
   }
 }
 
-# --- 3. 14 Backend Microservices ECS Definitions ---
 module "ecs_backend_services" {
   for_each                          = local.backend_services
   source                            = "../../../../modules/aws/ecs_service"
@@ -2016,7 +2134,7 @@ module "ecs_backend_services" {
   container_port                    = each.value.port
   target_group_arn                  = each.value.target_group_arn
 
-  security_group_ids = [module.app_sg.security_group_id]
+  security_group_ids = [module.backend_sg.security_group_id]
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
@@ -2046,4 +2164,91 @@ module "ecs_backend_services" {
       }
     }
   ])
+}
+
+// =============================================================
+// SECTION 3: DATABASE & CACHE (RDS MariaDB, RDS PostgreSQL, ElastiCache Redis)
+// =============================================================
+
+# ----------- RDS MariaDB (Existing Prod ERP Database - Imported) -----------
+
+module "rds_mariadb" {
+  source                               = "../../../../modules/aws/rds"
+  identifier                           = "erp"
+  identifier_override                  = "prod-erp"
+  subnet_group_name_override           = "prod-erp-subnet-group"
+  engine                               = "mariadb"
+  engine_version                       = var.mariadb_engine_version
+  instance_class                       = "db.m5.xlarge"
+  allocated_storage                    = 200
+  storage_type                         = "gp3"
+  db_name                              = null
+  username                             = "admin"
+  password                             = var.master_db_user_pass
+  subnet_ids                           = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
+  security_group_ids                   = [module.db_sg.security_group_id]
+  performance_insights_enabled        = true
+  performance_insights_retention_period = 731
+
+  environment = var.environment
+  project     = var.project
+}
+
+# ----------- RDS PostgreSQL (for Saleor & Strapi) -----------
+
+module "rds_postgres" {
+  source             = "../../../../modules/aws/rds"
+  identifier         = "saleor-strapi"
+  engine             = "postgres"
+  engine_version     = var.postgres_engine_version
+  instance_class     = "db.m5.large"
+  allocated_storage  = 100
+  storage_type       = "gp3"
+  db_name            = "fixxlypostgres"
+  username           = var.postgres_master_user_name
+  password           = var.postgres_master_user_pass
+  subnet_ids         = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
+  security_group_ids = [module.postgres_sg.security_group_id]
+
+  environment = var.environment
+  project     = var.project
+}
+
+# ----------- RDS PostgreSQL (Dedicated for Backend Microservices) -----------
+
+module "rds_backend_postgres" {
+  source             = "../../../../modules/aws/rds"
+  identifier         = "backend-postgres"
+  engine             = "postgres"
+  engine_version     = var.postgres_engine_version
+  instance_class     = "db.m5.xlarge"
+  allocated_storage  = 100
+  storage_type       = "gp3"
+  db_name            = "postgres"
+  username           = var.backend_postgres_master_user_name
+  password           = var.backend_postgres_master_user_pass
+  subnet_ids         = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
+  security_group_ids = [module.backend_postgres_sg.security_group_id]
+
+  environment = var.environment
+  project     = var.project
+}
+
+# ----------- ElastiCache Valkey/Redis (Existing Prod Cache - Imported) -----------
+
+module "elasticache_redis" {
+  source                      = "../../../../modules/aws/elasticache"
+  name                        = "erp-cache"
+  engine                      = "valkey"
+  engine_version              = "9.1"
+  node_type                   = "cache.t3.medium"
+  name_override               = "prod-erp-cache"
+  subnet_group_name_override  = "prod-cache"
+  subnet_ids                  = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
+  security_group_ids          = [module.redis_sg.security_group_id]
+  apply_immediately           = true
+  transit_encryption_mode     = "preferred"
+
+  environment = var.environment
+  project     = var.project
 }

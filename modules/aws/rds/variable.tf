@@ -60,6 +60,12 @@ variable "security_group_ids" {
   description = "List of security group IDs to attach to the RDS instance"
 }
 
+variable "subnet_group_name_override" {
+  type        = string
+  default     = null
+  description = "Optional override for DB subnet group name"
+}
+
 variable "multi_az" {
   type        = bool
   default     = false
@@ -228,5 +234,11 @@ variable "tags" {
   type        = map(string)
   default     = {}
   description = "A map of tags to add to all resources"
+}
+
+variable "identifier_override" {
+  type        = string
+  default     = null
+  description = "Optional DB instance identifier override"
 }
 

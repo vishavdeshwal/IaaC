@@ -21,12 +21,12 @@ resource "aws_elasticache_subnet_group" "elasticache" {
 # -------
 
 resource "aws_elasticache_replication_group" "redis" {
-  count = var.engine == "redis" ? 1 : 0
+  count = var.engine == "redis" || var.engine == "valkey" ? 1 : 0
 
   replication_group_id = var.name_override != null ? var.name_override : "${var.environment}-${var.project}-${var.name}"
   description          = "${var.environment}-${var.project} Redis cache"
 
-  engine             = "redis"
+  engine             = var.engine
   engine_version     = var.engine_version
   node_type          = var.node_type
   subnet_group_name  = aws_elasticache_subnet_group.elasticache.name
