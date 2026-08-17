@@ -101,6 +101,12 @@ variable "access_logs_bucket" {
   description = "S3 bucket name for ALB access logs. If null, access logs are disabled."
 }
 
+variable "access_logs_prefix" {
+  type        = string
+  default     = null
+  description = "Key prefix for ALB access logs. Null keeps the default '<environment>-<project>-<name>' prefix; set \"\" to write to the bucket root."
+}
+
 variable "environment" {
   type = string
 }

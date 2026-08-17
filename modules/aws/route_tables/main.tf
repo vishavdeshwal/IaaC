@@ -32,18 +32,3 @@ resource "aws_route_table" "private" {
     Name = "${var.environment}-${var.project}-private-rt"
   }
 }
-# -----------------
-# Route Table Associations
-# -----------------
-
-resource "aws_route_table_association" "public" {
-  for_each       = var.public_subnet_ids
-  subnet_id      = each.value
-  route_table_id = aws_route_table.public.id
-}
-
-resource "aws_route_table_association" "private" {
-  for_each       = var.private_subnet_ids
-  subnet_id      = each.value
-  route_table_id = aws_route_table.private.id
-}

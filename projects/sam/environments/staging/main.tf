@@ -1276,6 +1276,7 @@ module "ecs_mailer" {
   task_role_arn      = module.mailer_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
+  platform_version   = "1.4.0"
 
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],

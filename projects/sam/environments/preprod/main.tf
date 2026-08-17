@@ -607,8 +607,14 @@ resource "aws_lb_listener_rule" "frontend" {
 module "ecs_cluster" {
   source       = "../../../../modules/aws/ecs_cluster"
   cluster_name = "${var.environment}-${var.project}-app-sammmm"
-  environment  = var.environment
-  project      = var.project
+
+  # Matches deployed reality. Cost review proposes dropping preprod to
+  # "disabled" (baseline) — change deliberately, not as drift cleanup.
+  enable_container_insights = true
+  container_insights_value  = "enhanced"
+
+  environment = var.environment
+  project     = var.project
 }
 
 // ECR
@@ -1243,6 +1249,7 @@ module "ecs_pdf" {
   task_role_arn      = module.pdf_task_role.role_arn
   desired_count      = 1
   launch_type        = "FARGATE"
+  platform_version   = "1.4.0"
 
   subnet_ids = [
     module.subnets.private_subnet_ids["app-1"],

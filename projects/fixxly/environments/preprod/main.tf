@@ -524,7 +524,7 @@ module "alb" {
   http_default_action    = var.certificate_arn != "" ? "redirect_to_https" : "forward"
   http_target_group_arn  = module.strapi_target_group.target_group_arn
   certificate_arn        = var.certificate_arn != "" ? var.certificate_arn : null
-  https_target_group_arn = var.certificate_arn != "" ? module.strapi_target_group.target_group_arn : null
+  https_target_group_arn = var.certificate_arn != "" ? module.target_group_frontend.target_group_arn : null
   environment            = var.environment
   project                = var.project
 }

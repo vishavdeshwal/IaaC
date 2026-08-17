@@ -461,6 +461,13 @@ module "redis_sg" {
       protocol        = "tcp"
       security_groups = [module.backend_sg.security_group_id]
       description     = "Allow Redis access strictly from Backend Microservices SG"
+    },
+    {
+      from_port = 6379
+      to_port = 6379
+      protocol = "tcp"
+      security_groups = [module.erp_sg.security_group_id]
+      description = "Allow Redis access strictly from ERP SG"
     }
   ]
 
@@ -690,7 +697,7 @@ module "alb" {
   http_default_action    = var.certificate_arn != "" ? "redirect_to_https" : "forward"
   http_target_group_arn  = module.strapi_target_group.target_group_arn
   certificate_arn        = var.certificate_arn != "" ? var.certificate_arn : null
-  https_target_group_arn = var.certificate_arn != "" ? module.strapi_target_group.target_group_arn : null
+  https_target_group_arn = var.certificate_arn != "" ? module.target_group_frontend.target_group_arn : null
   environment            = var.environment
   project                = var.project
 }
@@ -2175,7 +2182,7 @@ module "ecs_backend_services" {
 module "rds_mariadb" {
   source                               = "../../../../modules/aws/rds"
   identifier                           = "erp"
-  identifier_override                  = "prod-erp"
+  identifier_override                  = "prod-fixxly-erp"
   subnet_group_name_override           = "prod-erp-subnet-group"
   engine                               = "mariadb"
   engine_version                       = var.mariadb_engine_version

@@ -17,8 +17,9 @@ resource "aws_lb" "alb" {
     # for_each = <CONDITION> ? <IF_TRUE> : <IF_FALSE>
     for_each = var.access_logs_bucket != null ? [1] : []
     content {
-      bucket  = var.access_logs_bucket
-      prefix  = "${var.environment}-${var.project}-${var.name}"
+      bucket = var.access_logs_bucket
+      # null keeps the historical computed prefix; set "" for a bucket root.
+      prefix  = var.access_logs_prefix != null ? var.access_logs_prefix : "${var.environment}-${var.project}-${var.name}"
       enabled = true
     }
   }

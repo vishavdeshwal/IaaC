@@ -418,7 +418,7 @@ module "redis" {
   source             = "../../../../modules/aws/elasticache"
   name               = "cache"
   engine             = "redis"
-  node_type          = "cache.t3.micro"
+  node_type          = "cache.m5.large"
   num_cache_clusters = 1
   transit_encryption = false
   at_rest_encryption = false
@@ -501,11 +501,17 @@ module "alb" {
     module.subnets.public_subnet_ids["public-2"]
   ]
 
-  http_default_action   = "forward"
+  http_default_action   = "redirect_to_https"
   http_target_group_arn = module.target_group.target_group_arn
 
   certificate_arn        = var.certificate_arn
   https_target_group_arn = module.target_group_webapi.target_group_arn
+
+  # Access logging was enabled manually; codified here so apply is a no-op.
+  # NOTE: this is a preprod-named bucket holding PROD logs. Migrating to a
+  # prod-owned bucket is a separate, deliberate change (see drift report A2).
+  access_logs_bucket = "sammmm-preprod-access-logs"
+  access_logs_prefix = ""
 
   environment = var.environment
   project     = var.project
@@ -1022,8 +1028,14 @@ module "ecs_flush" {
 module "ecs_cluster" {
   source       = "../../../../modules/aws/ecs_cluster"
   cluster_name = "${var.environment}-${var.project}-app-sammmm"
-  environment  = var.environment
-  project      = var.project
+
+  # Matches deployed reality. Cost review proposes "enabled" (standard
+  # resolution) — change deliberately, not as drift cleanup.
+  enable_container_insights = true
+  container_insights_value  = "enhanced"
+
+  environment = var.environment
+  project     = var.project
 }
 
 module "ecs_webapi" {
