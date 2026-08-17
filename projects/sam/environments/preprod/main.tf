@@ -1506,3 +1506,103 @@ resource "aws_appautoscaling_policy" "frontend_policy" {
     scale_out_cooldown = 60
   }
 }
+
+
+// =============================================================
+// Service autoscaling — worker + API services
+//
+// These were created manually in the console during the launch window and
+// were unmanaged until 2026-08-17. Values below mirror deployed reality
+// exactly; imported, not recreated. See DRIFT-REPORT-2026-08-11.md §3.1.
+//
+// Ceilings are deliberately lower than prod (scan/pdf 4 vs 10, flush 6 vs 15).
+// =============================================================
+
+locals {
+  service_autoscaling = {
+    webapi = {
+      min_capacity = 2
+      max_capacity = 10
+      policy_name  = "webapi-cpu60"
+      target_value = 60
+      queue_name   = null
+    }
+    webchat = {
+      min_capacity = 2
+      max_capacity = 8
+      policy_name  = "webchat-cpu60"
+      target_value = 60
+      queue_name   = null
+    }
+    scan = {
+      min_capacity = 1
+      max_capacity = 4
+      policy_name  = "scan-queue-backlog"
+      target_value = 20
+      queue_name   = module.sqs_scan.queue_name
+    }
+    pdf = {
+      min_capacity = 1
+      max_capacity = 4
+      policy_name  = "render-queue-backlog"
+      target_value = 20
+      queue_name   = module.sqs_render.queue_name
+    }
+    flush = {
+      min_capacity = 2
+      max_capacity = 6
+      policy_name  = "flush-fifo-backlog"
+      target_value = 40
+      queue_name   = module.sqs_flush.queue_name
+    }
+  }
+}
+
+resource "aws_appautoscaling_target" "service" {
+  for_each = local.service_autoscaling
+
+  max_capacity       = each.value.max_capacity
+  min_capacity       = each.value.min_capacity
+  resource_id        = "service/${module.ecs_cluster.cluster_name}/${var.environment}-${var.project}-sammmm-${each.key}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "service" {
+  for_each = local.service_autoscaling
+
+  name               = each.value.policy_name
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.service[each.key].resource_id
+  scalable_dimension = aws_appautoscaling_target.service[each.key].scalable_dimension
+  service_namespace  = aws_appautoscaling_target.service[each.key].service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = each.value.target_value
+    scale_out_cooldown = 60
+    scale_in_cooldown  = 180
+
+    # CPU-driven services
+    dynamic "predefined_metric_specification" {
+      for_each = each.value.queue_name == null ? [1] : []
+      content {
+        predefined_metric_type = "ECSServiceAverageCPUUtilization"
+      }
+    }
+
+    # Queue-depth-driven workers
+    dynamic "customized_metric_specification" {
+      for_each = each.value.queue_name != null ? [1] : []
+      content {
+        metric_name = "ApproximateNumberOfMessagesVisible"
+        namespace   = "AWS/SQS"
+        statistic   = "Average"
+
+        dimensions {
+          name  = "QueueName"
+          value = each.value.queue_name
+        }
+      }
+    }
+  }
+}
