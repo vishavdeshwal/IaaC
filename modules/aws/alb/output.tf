@@ -27,3 +27,9 @@ output "https_listener_arn" {
   value       = length(aws_lb_listener.https) > 0 ? aws_lb_listener.https[0].arn : null
   description = "ARN of the HTTPS listener (null if no certificate was provided)"
 }
+
+output "alb_arn_suffix" {
+  value       = aws_lb.alb.arn_suffix
+  description = "ARN suffix of the ALB for use in CloudWatch metrics"
+}
+

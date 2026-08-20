@@ -741,3 +741,68 @@ resource "aws_eip" "bastion" {
     Project     = var.project
   }
 }
+
+// =============================================================
+// 10. Application Auto Scaling (Worker Queue-Backlog & API CPU)
+// =============================================================
+
+# Worker Service — Autoscaling based on SQS Queue Backlog
+resource "aws_appautoscaling_target" "worker_target" {
+  max_capacity       = 10
+  min_capacity       = 1
+  resource_id        = "service/${module.ecs_cluster.cluster_name}/${module.ecs_fargate_worker.service_name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "worker_queue_scaling" {
+  name               = "worker-queue-backlog"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.worker_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.worker_target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.worker_target.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = 20
+    scale_out_cooldown = 60
+    scale_in_cooldown  = 180
+
+    customized_metric_specification {
+      metric_name = "ApproximateNumberOfMessagesVisible"
+      namespace   = "AWS/SQS"
+      statistic   = "Average"
+
+      dimensions {
+        name  = "QueueName"
+        value = module.sqs_main.queue_name
+      }
+    }
+  }
+}
+
+# API Service — Autoscaling based on CPU Utilization
+resource "aws_appautoscaling_target" "api_target" {
+  max_capacity       = 10
+  min_capacity       = 1
+  resource_id        = "service/${module.ecs_cluster.cluster_name}/${module.ecs_fargate_api.service_name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "api_cpu_scaling" {
+  name               = "api-cpu60"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.api_target.resource_id
+  scalable_dimension = aws_appautoscaling_target.api_target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.api_target.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = 60
+    scale_out_cooldown = 60
+    scale_in_cooldown  = 180
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+  }
+}

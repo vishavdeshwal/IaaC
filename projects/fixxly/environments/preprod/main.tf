@@ -2047,3 +2047,87 @@ module "ecs_backend_services" {
     }
   ])
 }
+
+# ----------- ECS Application Auto Scaling -----------
+
+# 1. Backend Microservices Auto Scaling
+module "ecs_backend_autoscaling" {
+  for_each              = local.backend_services
+  source                = "../../../../modules/aws/ecs_autoscaling"
+  name                  = each.key
+  cluster_name          = module.ecs_cluster.cluster_name
+  service_name          = module.ecs_backend_services[each.key].service_name
+  min_capacity          = 1
+  max_capacity          = 3
+  enable_cpu_scaling    = true
+  cpu_target_value      = 75.0
+  enable_memory_scaling = true
+  memory_target_value   = 80.0
+
+  environment = var.environment
+  project     = var.project
+}
+
+# 2. Frontend Auto Scaling (ALB Request Count + CPU)
+module "ecs_frontend_autoscaling" {
+  source                          = "../../../../modules/aws/ecs_autoscaling"
+  name                            = "frontend"
+  cluster_name                    = module.ecs_cluster.cluster_name
+  service_name                    = module.ecs_frontend.service_name
+  min_capacity                    = 1
+  max_capacity                    = 4
+  enable_cpu_scaling              = true
+  cpu_target_value                = 75.0
+  alb_arn_suffix                  = module.alb.alb_arn_suffix
+  target_group_arn_suffix         = module.target_group_frontend.target_group_arn_suffix
+  alb_request_count_target_value = 1000.0
+
+  environment = var.environment
+  project     = var.project
+}
+
+# 3. Strapi Auto Scaling
+module "ecs_strapi_autoscaling" {
+  source             = "../../../../modules/aws/ecs_autoscaling"
+  name               = "strapi"
+  cluster_name       = module.ecs_cluster.cluster_name
+  service_name       = module.ecs_strapi.service_name
+  min_capacity       = 1
+  max_capacity       = 2
+  enable_cpu_scaling = true
+  cpu_target_value   = 75.0
+
+  environment = var.environment
+  project     = var.project
+}
+
+# 4. Saleor API Auto Scaling
+module "ecs_saleor_api_autoscaling" {
+  source             = "../../../../modules/aws/ecs_autoscaling"
+  name               = "saleor-api"
+  cluster_name       = module.ecs_cluster.cluster_name
+  service_name       = module.ecs_saleor_api.service_name
+  min_capacity       = 1
+  max_capacity       = 3
+  enable_cpu_scaling = true
+  cpu_target_value   = 75.0
+
+  environment = var.environment
+  project     = var.project
+}
+
+# 5. Saleor Worker Auto Scaling
+module "ecs_saleor_worker_autoscaling" {
+  source             = "../../../../modules/aws/ecs_autoscaling"
+  name               = "saleor-worker"
+  cluster_name       = module.ecs_cluster.cluster_name
+  service_name       = module.ecs_saleor_worker.service_name
+  min_capacity       = 1
+  max_capacity       = 3
+  enable_cpu_scaling = true
+  cpu_target_value   = 75.0
+
+  environment = var.environment
+  project     = var.project
+}
+
