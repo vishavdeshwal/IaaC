@@ -463,11 +463,11 @@ module "redis_sg" {
       description     = "Allow Redis access strictly from Backend Microservices SG"
     },
     {
-      from_port = 6379
-      to_port = 6379
-      protocol = "tcp"
+      from_port       = 6379
+      to_port         = 6379
+      protocol        = "tcp"
       security_groups = [module.erp_sg.security_group_id]
-      description = "Allow Redis access strictly from ERP SG"
+      description     = "Allow Redis access strictly from ERP SG"
     }
   ]
 
@@ -594,16 +594,18 @@ module "target_group_bff" {
 }
 
 module "target_group_product" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "product"
-  port              = var.product_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "product"
+  port                 = var.product_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
+
 
 module "target_group_order" {
   source            = "../../../../modules/aws/target_group"
@@ -834,6 +836,28 @@ resource "aws_lb_listener_rule" "erp_sync_rule" {
   }
 }
 
+resource "aws_lb_listener_rule" "saleor_webhook_erp_sync_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 21
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_erp_sync.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/erp/webhooks/saleor*"]
+    }
+  }
+}
+
 resource "aws_lb_listener_rule" "product_rule" {
   listener_arn = module.alb.https_listener_arn
   priority     = 30
@@ -852,6 +876,28 @@ resource "aws_lb_listener_rule" "product_rule" {
   condition {
     path_pattern {
       values = ["/api/v1/erp/products*", "/api/v1/erp/categories*", "/api/v1/erp/product-types*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "saleor_webhook_product_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 35
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_product.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/saleor/webhooks/*"]
     }
   }
 }
@@ -1243,11 +1289,35 @@ module "strapi_secrets" {
 # ----------- S3 Public Media Bucket -----------
 
 module "s3_media" {
-  source      = "../../../../modules/aws/s3"
-  bucket_name = "${var.environment}-${var.project}-saleor-strapi-media"
-  environment = var.environment
-  project     = var.project
+  source                     = "../../../../modules/aws/s3"
+  bucket_name                = "${var.environment}-${var.project}-saleor-strapi-media"
+  enable_public_read         = true
+  manage_public_access_block = true
+  block_public_acls          = false
+  block_public_policy        = false
+  ignore_public_acls         = false
+  restrict_public_buckets    = false
+  enable_cors                = true
+  environment                = var.environment
+  project                    = var.project
 }
+
+# ----------- Private S3 Bucket for Saleor & Strapi -----------
+
+module "s3_private_media" {
+  source                     = "../../../../modules/aws/s3"
+  bucket_name                = "${var.environment}-${var.project}-saleor-strapi-private-bucket"
+  enable_public_read         = false
+  manage_public_access_block = true
+  block_public_acls          = true
+  block_public_policy        = true
+  ignore_public_acls         = true
+  restrict_public_buckets    = true
+  enable_cors                = false
+  environment                = var.environment
+  project                    = var.project
+}
+
 
 # ----------- AWS Cloud Map Private DNS Namespace -----------
 
@@ -1347,6 +1417,35 @@ module "ecs_backend_task_role" {
   environment = var.environment
   project     = var.project
 }
+
+# AWS Bedrock Invocation Policy for Consumer BFF & Backend Microservices
+resource "aws_iam_policy" "bedrock_policy" {
+  name        = "${var.environment}-${var.project}-bedrock-policy"
+  description = "Allows microservices to invoke AWS Bedrock models"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "BedrockInvokePermissions"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream",
+          "bedrock:ListFoundationModels",
+          "bedrock:GetFoundationModel"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_backend_bedrock_task_policy" {
+  role       = module.ecs_backend_task_role.role_name
+  policy_arn = aws_iam_policy.bedrock_policy.arn
+}
+
 
 resource "aws_iam_role_policy" "ecs_backend_secretsmanager_task_policy" {
   name = "${var.environment}-${var.project}-ecs-backend-secretsmanager-task-policy"
@@ -1565,7 +1664,9 @@ resource "aws_iam_role_policy" "ecs_saleor_s3_task_policy" {
         ]
         Resource = [
           module.s3_media.bucket_arn,
-          "${module.s3_media.bucket_arn}/*"
+          "${module.s3_media.bucket_arn}/*",
+          module.s3_private_media.bucket_arn,
+          "${module.s3_private_media.bucket_arn}/*"
         ]
       }
     ]
@@ -1700,7 +1801,9 @@ resource "aws_iam_role_policy" "ecs_strapi_s3_task_policy" {
         ]
         Resource = [
           module.s3_media.bucket_arn,
-          "${module.s3_media.bucket_arn}/*"
+          "${module.s3_media.bucket_arn}/*",
+          module.s3_private_media.bucket_arn,
+          "${module.s3_private_media.bucket_arn}/*"
         ]
       }
     ]
@@ -2180,21 +2283,21 @@ module "ecs_backend_services" {
 # ----------- RDS MariaDB (Existing Prod ERP Database - Imported) -----------
 
 module "rds_mariadb" {
-  source                               = "../../../../modules/aws/rds"
-  identifier                           = "erp"
-  identifier_override                  = "prod-fixxly-erp"
-  subnet_group_name_override           = "prod-erp-subnet-group"
-  engine                               = "mariadb"
-  engine_version                       = var.mariadb_engine_version
-  instance_class                       = "db.m5.xlarge"
-  allocated_storage                    = 200
-  storage_type                         = "gp3"
-  db_name                              = null
-  username                             = "admin"
-  password                             = var.master_db_user_pass
-  subnet_ids                           = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
-  security_group_ids                   = [module.db_sg.security_group_id]
-  performance_insights_enabled        = true
+  source                                = "../../../../modules/aws/rds"
+  identifier                            = "erp"
+  identifier_override                   = "prod-fixxly-erp"
+  subnet_group_name_override            = "prod-erp-subnet-group"
+  engine                                = "mariadb"
+  engine_version                        = var.mariadb_engine_version
+  instance_class                        = "db.m5.xlarge"
+  allocated_storage                     = 200
+  storage_type                          = "gp3"
+  db_name                               = null
+  username                              = "admin"
+  password                              = var.master_db_user_pass
+  subnet_ids                            = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
+  security_group_ids                    = [module.db_sg.security_group_id]
+  performance_insights_enabled          = true
   performance_insights_retention_period = 731
 
   environment = var.environment
@@ -2244,17 +2347,17 @@ module "rds_backend_postgres" {
 # ----------- ElastiCache Valkey/Redis (Existing Prod Cache - Imported) -----------
 
 module "elasticache_redis" {
-  source                      = "../../../../modules/aws/elasticache"
-  name                        = "erp-cache"
-  engine                      = "valkey"
-  engine_version              = "9.1"
-  node_type                   = "cache.t3.medium"
-  name_override               = "prod-erp-cache"
-  subnet_group_name_override  = "prod-cache"
-  subnet_ids                  = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
-  security_group_ids          = [module.redis_sg.security_group_id]
-  apply_immediately           = true
-  transit_encryption_mode     = "preferred"
+  source                     = "../../../../modules/aws/elasticache"
+  name                       = "erp-cache"
+  engine                     = "valkey"
+  engine_version             = "9.1"
+  node_type                  = "cache.t3.medium"
+  name_override              = "prod-erp-cache"
+  subnet_group_name_override = "prod-cache"
+  subnet_ids                 = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
+  security_group_ids         = [module.redis_sg.security_group_id]
+  apply_immediately          = true
+  transit_encryption_mode    = "preferred"
 
   environment = var.environment
   project     = var.project
@@ -2282,16 +2385,16 @@ module "ecs_backend_autoscaling" {
 
 # 2. Frontend Auto Scaling (ALB Request Count + CPU)
 module "ecs_frontend_autoscaling" {
-  source                          = "../../../../modules/aws/ecs_autoscaling"
-  name                            = "frontend"
-  cluster_name                    = module.ecs_cluster.cluster_name
-  service_name                    = module.ecs_frontend.service_name
-  min_capacity                    = 2
-  max_capacity                    = 10
-  enable_cpu_scaling              = true
-  cpu_target_value                = 70.0
-  alb_arn_suffix                  = module.alb.alb_arn_suffix
-  target_group_arn_suffix         = module.target_group_frontend.target_group_arn_suffix
+  source                         = "../../../../modules/aws/ecs_autoscaling"
+  name                           = "frontend"
+  cluster_name                   = module.ecs_cluster.cluster_name
+  service_name                   = module.ecs_frontend.service_name
+  min_capacity                   = 2
+  max_capacity                   = 10
+  enable_cpu_scaling             = true
+  cpu_target_value               = 70.0
+  alb_arn_suffix                 = module.alb.alb_arn_suffix
+  target_group_arn_suffix        = module.target_group_frontend.target_group_arn_suffix
   alb_request_count_target_value = 1000.0
 
   environment = var.environment

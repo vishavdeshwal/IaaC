@@ -76,59 +76,59 @@ output "ecr_frontend_repository_url" {
 }
 
 output "ecr_consumer_bff_repository_url" {
-  value       = module.ecr_consumer_bff.repository_url
+  value = module.ecr_consumer_bff.repository_url
 }
 
 output "ecr_auth_service_repository_url" {
-  value       = module.ecr_auth_service.repository_url
+  value = module.ecr_auth_service.repository_url
 }
 
 output "ecr_product_service_repository_url" {
-  value       = module.ecr_product_service.repository_url
+  value = module.ecr_product_service.repository_url
 }
 
 output "ecr_order_service_repository_url" {
-  value       = module.ecr_order_service.repository_url
+  value = module.ecr_order_service.repository_url
 }
 
 output "ecr_cart_service_repository_url" {
-  value       = module.ecr_cart_service.repository_url
+  value = module.ecr_cart_service.repository_url
 }
 
 output "ecr_inventory_service_repository_url" {
-  value       = module.ecr_inventory_service.repository_url
+  value = module.ecr_inventory_service.repository_url
 }
 
 output "ecr_cms_bridge_repository_url" {
-  value       = module.ecr_cms_bridge.repository_url
+  value = module.ecr_cms_bridge.repository_url
 }
 
 output "ecr_coupon_service_repository_url" {
-  value       = module.ecr_coupon_service.repository_url
+  value = module.ecr_coupon_service.repository_url
 }
 
 output "ecr_notification_service_repository_url" {
-  value       = module.ecr_notification_service.repository_url
+  value = module.ecr_notification_service.repository_url
 }
 
 output "ecr_payment_service_repository_url" {
-  value       = module.ecr_payment_service.repository_url
+  value = module.ecr_payment_service.repository_url
 }
 
 output "ecr_erp_sync_service_repository_url" {
-  value       = module.ecr_erp_sync_service.repository_url
+  value = module.ecr_erp_sync_service.repository_url
 }
 
 output "ecr_wallet_service_repository_url" {
-  value       = module.ecr_wallet_service.repository_url
+  value = module.ecr_wallet_service.repository_url
 }
 
 output "ecr_assets_service_repository_url" {
-  value       = module.ecr_assets_service.repository_url
+  value = module.ecr_assets_service.repository_url
 }
 
 output "ecr_serviceability_service_repository_url" {
-  value       = module.ecr_serviceability_service.repository_url
+  value = module.ecr_serviceability_service.repository_url
 }
 
 # --- Service Discovery Output ---

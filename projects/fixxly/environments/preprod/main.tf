@@ -351,16 +351,16 @@ module "msk_sg" {
 # ----------- ALB & Target Groups -----------
 
 module "strapi_target_group" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "strapi"
-  port              = 1337
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/_health"
+  source               = "../../../../modules/aws/target_group"
+  name                 = "strapi"
+  port                 = 1337
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/_health"
   health_check_matcher = "200-299"
-  environment       = var.environment
-  project           = var.project
+  environment          = var.environment
+  project              = var.project
 }
 
 module "saleor_target_group" {
@@ -1099,6 +1099,35 @@ module "ecs_backend_task_role" {
   project     = var.project
 }
 
+# AWS Bedrock Invocation Policy for Consumer BFF & Backend Microservices
+resource "aws_iam_policy" "bedrock_policy" {
+  name        = "${var.environment}-${var.project}-bedrock-policy"
+  description = "Allows microservices to invoke AWS Bedrock models"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "BedrockInvokePermissions"
+        Effect = "Allow"
+        Action = [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream",
+          "bedrock:ListFoundationModels",
+          "bedrock:GetFoundationModel"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_backend_bedrock_task_policy" {
+  role       = module.ecs_backend_task_role.role_name
+  policy_arn = aws_iam_policy.bedrock_policy.arn
+}
+
+
 resource "aws_iam_role_policy" "ecs_backend_secretsmanager_task_policy" {
   name = "${var.environment}-${var.project}-ecs-backend-secretsmanager-task-policy"
   role = module.ecs_backend_task_role.role_name
@@ -1416,6 +1445,22 @@ module "s3_media" {
   project                    = var.project
 }
 
+# ----------- Private S3 Bucket for Saleor & Strapi -----------
+
+module "s3_private_media" {
+  source                     = "../../../../modules/aws/s3"
+  bucket_name                = "${var.environment}-${var.project}-saleor-strapi-private-bucket"
+  enable_public_read         = false
+  manage_public_access_block = true
+  block_public_acls          = true
+  block_public_policy        = true
+  ignore_public_acls         = true
+  restrict_public_buckets    = true
+  enable_cors                = false
+  environment                = var.environment
+  project                    = var.project
+}
+
 resource "aws_iam_role_policy" "ecs_saleor_task_s3_policy" {
   name = "${var.environment}-${var.project}-ecs-saleor-task-s3-policy"
   role = module.ecs_saleor_task_role.role_name
@@ -1429,7 +1474,10 @@ resource "aws_iam_role_policy" "ecs_saleor_task_s3_policy" {
           "s3:ListBucket",
           "s3:GetBucketLocation"
         ]
-        Resource = module.s3_media.bucket_arn
+        Resource = [
+          module.s3_media.bucket_arn,
+          module.s3_private_media.bucket_arn
+        ]
       },
       {
         Effect = "Allow"
@@ -1439,7 +1487,10 @@ resource "aws_iam_role_policy" "ecs_saleor_task_s3_policy" {
           "s3:DeleteObject",
           "s3:PutObjectAcl"
         ]
-        Resource = "${module.s3_media.bucket_arn}/*"
+        Resource = [
+          "${module.s3_media.bucket_arn}/*",
+          "${module.s3_private_media.bucket_arn}/*"
+        ]
       }
     ]
   })
@@ -1458,7 +1509,10 @@ resource "aws_iam_role_policy" "ecs_strapi_task_s3_policy" {
           "s3:ListBucket",
           "s3:GetBucketLocation"
         ]
-        Resource = module.s3_media.bucket_arn
+        Resource = [
+          module.s3_media.bucket_arn,
+          module.s3_private_media.bucket_arn
+        ]
       },
       {
         Effect = "Allow"
@@ -1468,11 +1522,15 @@ resource "aws_iam_role_policy" "ecs_strapi_task_s3_policy" {
           "s3:DeleteObject",
           "s3:PutObjectAcl"
         ]
-        Resource = "${module.s3_media.bucket_arn}/*"
+        Resource = [
+          "${module.s3_media.bucket_arn}/*",
+          "${module.s3_private_media.bucket_arn}/*"
+        ]
       }
     ]
   })
 }
+
 
 locals {
   saleor_container_secrets = [for k, v in var.saleor_secrets : { name = k, valueFrom = "${module.saleor_secrets.secret_arn}:${k}::" }]
@@ -1492,10 +1550,10 @@ module "ecs_saleor_api" {
   task_role_arn                     = module.ecs_saleor_task_role.role_arn
   health_check_grace_period_seconds = 300
   cpu                               = "512"
-  memory                 = "1024"
-  launch_type            = "FARGATE"
-  environment            = var.environment
-  project                = var.project
+  memory                            = "1024"
+  launch_type                       = "FARGATE"
+  environment                       = var.environment
+  project                           = var.project
 
   security_group_ids = [module.app_sg.security_group_id]
   subnet_ids = [
@@ -1680,11 +1738,11 @@ module "ecs_strapi" {
   task_role_arn                     = module.ecs_strapi_task_role.role_arn
   health_check_grace_period_seconds = 300
   cpu                               = "512"
-  memory             = "1024"
-  launch_type        = "FARGATE"
-  environment        = var.environment
-  project            = var.project
-  desired_count      = 1
+  memory                            = "1024"
+  launch_type                       = "FARGATE"
+  environment                       = var.environment
+  project                           = var.project
+  desired_count                     = 1
 
   security_group_ids = [module.app_sg.security_group_id]
   subnet_ids = [
@@ -2070,16 +2128,16 @@ module "ecs_backend_autoscaling" {
 
 # 2. Frontend Auto Scaling (ALB Request Count + CPU)
 module "ecs_frontend_autoscaling" {
-  source                          = "../../../../modules/aws/ecs_autoscaling"
-  name                            = "frontend"
-  cluster_name                    = module.ecs_cluster.cluster_name
-  service_name                    = module.ecs_frontend.service_name
-  min_capacity                    = 1
-  max_capacity                    = 4
-  enable_cpu_scaling              = true
-  cpu_target_value                = 75.0
-  alb_arn_suffix                  = module.alb.alb_arn_suffix
-  target_group_arn_suffix         = module.target_group_frontend.target_group_arn_suffix
+  source                         = "../../../../modules/aws/ecs_autoscaling"
+  name                           = "frontend"
+  cluster_name                   = module.ecs_cluster.cluster_name
+  service_name                   = module.ecs_frontend.service_name
+  min_capacity                   = 1
+  max_capacity                   = 4
+  enable_cpu_scaling             = true
+  cpu_target_value               = 75.0
+  alb_arn_suffix                 = module.alb.alb_arn_suffix
+  target_group_arn_suffix        = module.target_group_frontend.target_group_arn_suffix
   alb_request_count_target_value = 1000.0
 
   environment = var.environment
@@ -2107,8 +2165,8 @@ module "ecs_saleor_api_autoscaling" {
   name               = "saleor-api"
   cluster_name       = module.ecs_cluster.cluster_name
   service_name       = module.ecs_saleor_api.service_name
-  min_capacity       = 1
-  max_capacity       = 3
+  min_capacity       = 2
+  max_capacity       = 5
   enable_cpu_scaling = true
   cpu_target_value   = 75.0
 
