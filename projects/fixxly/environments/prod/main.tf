@@ -272,6 +272,13 @@ module "strapi_sg" {
       protocol        = "tcp"
       security_groups = [module.alb_sg.security_group_id]
       description     = "Allow HTTP traffic from ALB to Strapi CMS"
+    },
+    {
+      from_port       = 1337
+      to_port         = 1337
+      protocol        = "tcp"
+      security_groups = [module.backend_sg.security_group_id]
+      description     = "Allow internal HTTP traffic from Backend Microservices to Strapi CMS"
     }
   ]
 
@@ -466,6 +473,13 @@ module "redis_sg" {
       from_port       = 6379
       to_port         = 6379
       protocol        = "tcp"
+      security_groups = [module.strapi_sg.security_group_id]
+      description     = "Allow Redis access strictly from Strapi SG"
+    },
+    {
+      from_port       = 6379
+      to_port         = 6379
+      protocol        = "tcp"
       security_groups = [module.erp_sg.security_group_id]
       description     = "Allow Redis access strictly from ERP SG"
     }
@@ -582,15 +596,16 @@ module "target_group_frontend" {
 }
 
 module "target_group_bff" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "bff"
-  port              = var.consumer_bff_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "bff"
+  port                 = var.consumer_bff_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_product" {
@@ -608,63 +623,68 @@ module "target_group_product" {
 
 
 module "target_group_order" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "order"
-  port              = var.order_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "order"
+  port                 = var.order_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_cart" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "cart"
-  port              = var.cart_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "cart"
+  port                 = var.cart_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_inventory" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "inventory"
-  port              = var.inventory_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "inventory"
+  port                 = var.inventory_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_coupon" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "coupon"
-  port              = var.coupon_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "coupon"
+  port                 = var.coupon_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_payment" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "payment"
-  port              = var.payment_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "payment"
+  port                 = var.payment_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_erp_sync" {
@@ -941,7 +961,7 @@ resource "aws_lb_listener_rule" "cart_rule" {
 
   condition {
     path_pattern {
-      values = ["/api/v1/erp/delivery-policy*"]
+      values = ["/api/v1/erp/delivery-policy*", "/api/v1/erp/fee-policy*"]
     }
   }
 }
@@ -1007,7 +1027,29 @@ resource "aws_lb_listener_rule" "order_rule" {
 
   condition {
     path_pattern {
-      values = ["/api/v1/orders/*"]
+      values = ["/api/v1/orders/saleor/webhooks/*", "/api/v1/orders/internal/*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "saleor_webhook_cart_shipping_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 34
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_order.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/saleor/webhooks/shipping-methods*"]
     }
   }
 }
@@ -1859,7 +1901,7 @@ module "ecs_saleor_api" {
       environment = concat(
         [
           { name = "DATABASE_URL", value = "postgres://${var.postgres_master_user_name}:${var.postgres_master_user_pass}@${module.rds_postgres.endpoint}/fixxlypostgres" },
-          { name = "REDIS_URL", value = "rediss://${module.elasticache_redis.redis_primary_endpoint}:6379" },
+          { name = "REDIS_URL", value = "rediss://${module.elasticache_backend_redis.redis_primary_endpoint}:6379" },
           { name = "DEFAULT_FROM_EMAIL", value = "noreply@fixxly.in" },
           { name = "AWS_MEDIA_BUCKET_NAME", value = module.s3_media.bucket_name },
           { name = "AWS_MEDIA_CUSTOM_DOMAIN", value = module.s3_media.bucket_regional_domain_name }
@@ -1910,7 +1952,7 @@ module "ecs_saleor_worker" {
       environment = concat(
         [
           { name = "DATABASE_URL", value = "postgres://${var.postgres_master_user_name}:${var.postgres_master_user_pass}@${module.rds_postgres.endpoint}/fixxlypostgres" },
-          { name = "REDIS_URL", value = "rediss://${module.elasticache_redis.redis_primary_endpoint}:6379" },
+          { name = "REDIS_URL", value = "rediss://${module.elasticache_backend_redis.redis_primary_endpoint}:6379" },
           { name = "AWS_MEDIA_BUCKET_NAME", value = module.s3_media.bucket_name }
         ],
         [for k, v in var.saleor_env_vars : { name = k, value = v }]
@@ -1959,7 +2001,7 @@ module "ecs_saleor_beat" {
       environment = concat(
         [
           { name = "DATABASE_URL", value = "postgres://${var.postgres_master_user_name}:${var.postgres_master_user_pass}@${module.rds_postgres.endpoint}/fixxlypostgres" },
-          { name = "REDIS_URL", value = "rediss://${module.elasticache_redis.redis_primary_endpoint}:6379" }
+          { name = "REDIS_URL", value = "rediss://${module.elasticache_backend_redis.redis_primary_endpoint}:6379" }
         ],
         [for k, v in var.saleor_env_vars : { name = k, value = v }]
       )
@@ -2045,9 +2087,11 @@ module "ecs_strapi" {
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
-  target_group_arn = module.strapi_target_group.target_group_arn
-  container_name   = "strapi"
-  container_port   = 1337
+  target_group_arn       = module.strapi_target_group.target_group_arn
+  container_name         = "strapi"
+  container_port         = 1337
+  namespace_id           = aws_service_discovery_private_dns_namespace.internal.id
+  service_discovery_name = "strapi"
 
   container_definitions = jsonencode([
     {
@@ -2131,7 +2175,7 @@ locals {
   backend_common_env = concat(
     [
       { name = "NODE_ENV", value = "production" },
-      { name = "REDIS_URL", value = "rediss://${module.elasticache_redis.redis_primary_endpoint}:6379" },
+      { name = "REDIS_URL", value = "rediss://${module.elasticache_backend_redis.redis_primary_endpoint}:6379" },
       { name = "KAFKA_BROKERS", value = module.msk.bootstrap_brokers_plaintext },
       { name = "AUTH_BASE_URL", value = "http://auth-service.${var.environment}.${var.project}.internal:3001" },
       { name = "PRODUCT_BASE_URL", value = "http://product-service.${var.environment}.${var.project}.internal:3003" },
@@ -2358,6 +2402,23 @@ module "elasticache_redis" {
   security_group_ids         = [module.redis_sg.security_group_id]
   apply_immediately          = true
   transit_encryption_mode    = "preferred"
+
+  environment = var.environment
+  project     = var.project
+}
+
+# ----------- Dedicated ElastiCache Redis for Backend Microservices -----------
+
+module "elasticache_backend_redis" {
+  source             = "../../../../modules/aws/elasticache"
+  name               = "backend-redis"
+  engine             = "redis"
+  engine_version     = "7.0"
+  node_type          = "cache.t3.small"
+  name_override      = "${var.environment}-${var.project}-backend-redis"
+  subnet_ids         = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
+  security_group_ids = [module.redis_sg.security_group_id]
+  apply_immediately  = true
 
   environment = var.environment
   project     = var.project

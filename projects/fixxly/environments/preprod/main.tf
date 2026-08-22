@@ -182,11 +182,32 @@ module "app_sg" {
       description     = "Allow HTTP traffic from ALB"
     },
     {
+      from_port   = 3000
+      to_port     = 3025
+      protocol    = "tcp"
+      cidr_blocks = [var.vpc_cidr]
+      description = "Allow inter-service backend communication within VPC"
+    },
+    {
+      from_port   = 1337
+      to_port     = 1337
+      protocol    = "tcp"
+      cidr_blocks = [var.vpc_cidr]
+      description = "Allow Strapi port from VPC"
+    },
+    {
       from_port       = 1337
       to_port         = 1337
       protocol        = "tcp"
       security_groups = [module.alb_sg.security_group_id]
       description     = "Allow Strapi port from ALB"
+    },
+    {
+      from_port   = 8000
+      to_port     = 8000
+      protocol    = "tcp"
+      cidr_blocks = [var.vpc_cidr]
+      description = "Allow Saleor port from VPC"
     },
     {
       from_port       = 8000
@@ -421,99 +442,107 @@ module "target_group_frontend" {
 }
 
 module "target_group_bff" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "bff"
-  port              = var.consumer_bff_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "bff"
+  port                 = var.consumer_bff_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_payment" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "payment"
-  port              = var.payment_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "payment"
+  port                 = var.payment_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_erp_sync" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "erpsync"
-  port              = var.erp_sync_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "erpsync"
+  port                 = var.erp_sync_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_product" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "product"
-  port              = var.product_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "product"
+  port                 = var.product_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_inventory" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "inventory"
-  port              = var.inventory_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "inventory"
+  port                 = var.inventory_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_cart" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "cart"
-  port              = var.cart_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "cart"
+  port                 = var.cart_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_coupon" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "coupon"
-  port              = var.coupon_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "coupon"
+  port                 = var.coupon_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "target_group_serviceability" {
-  source            = "../../../../modules/aws/target_group"
-  name              = "srvability"
-  port              = var.serviceability_service_port
-  protocol          = "HTTP"
-  target_type       = "ip"
-  vpc_id            = module.vpc.vpc_id
-  health_check_path = "/health"
-  environment       = var.environment
-  project           = var.project
+  source               = "../../../../modules/aws/target_group"
+  name                 = "srvability"
+  port                 = var.serviceability_service_port
+  protocol             = "HTTP"
+  target_type          = "ip"
+  vpc_id               = module.vpc.vpc_id
+  health_check_path    = "/health"
+  health_check_matcher = "200,404"
+  environment          = var.environment
+  project              = var.project
 }
 
 module "alb" {
@@ -661,6 +690,28 @@ resource "aws_lb_listener_rule" "erp_sync_rule" {
   }
 }
 
+resource "aws_lb_listener_rule" "saleor_webhook_erp_sync_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 21
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_erp_sync.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api-preprod.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/erp/webhooks/saleor*"]
+    }
+  }
+}
+
 resource "aws_lb_listener_rule" "product_rule" {
   listener_arn = module.alb.https_listener_arn
   priority     = 30
@@ -679,6 +730,28 @@ resource "aws_lb_listener_rule" "product_rule" {
   condition {
     path_pattern {
       values = ["/api/v1/erp/products*", "/api/v1/erp/categories*", "/api/v1/erp/product-types*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "saleor_webhook_product_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 35
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_product.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api-preprod.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/saleor/webhooks/*"]
     }
   }
 }
@@ -1749,9 +1822,11 @@ module "ecs_strapi" {
     module.subnets.private_subnet_ids["app-1"],
     module.subnets.private_subnet_ids["app-2"]
   ]
-  target_group_arn = module.strapi_target_group.target_group_arn
-  container_name   = "strapi"
-  container_port   = 1337
+  target_group_arn       = module.strapi_target_group.target_group_arn
+  container_name         = "strapi"
+  container_port         = 1337
+  namespace_id           = aws_service_discovery_private_dns_namespace.internal.id
+  service_discovery_name = "strapi"
 
   container_definitions = jsonencode([
     {
@@ -1848,7 +1923,7 @@ module "elasticache_redis" {
   name               = "redis"
   engine             = "redis"
   engine_version     = "7.0"
-  node_type          = "cache.t4g.micro"
+  node_type          = "cache.t3.small"
   subnet_ids         = [module.subnets.private_subnet_ids["db-1"], module.subnets.private_subnet_ids["db-2"]]
   security_group_ids = [module.redis_sg.security_group_id]
 

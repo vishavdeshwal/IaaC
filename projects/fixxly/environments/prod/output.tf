@@ -45,7 +45,12 @@ output "rds_backend_postgres_endpoint" {
 
 output "redis_primary_endpoint" {
   value       = module.elasticache_redis.redis_primary_endpoint
-  description = "Primary endpoint address for ElastiCache Redis cluster"
+  description = "Primary endpoint address for ElastiCache Redis cluster (ERP)"
+}
+
+output "redis_backend_primary_endpoint" {
+  value       = module.elasticache_backend_redis.redis_primary_endpoint
+  description = "Primary endpoint address for Dedicated Backend ElastiCache Redis cluster (Microservices + Saleor)"
 }
 
 output "ecs_cluster_name" {
