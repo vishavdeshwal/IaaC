@@ -1,5 +1,10 @@
+data "aws_elb_service_account" "main" {
+  count = var.enable_alb_access_logs_policy ? 1 : 0
+}
+
 resource "aws_s3_bucket" "bucket" {
-  bucket = var.bucket_name
+  bucket        = var.bucket_name
+  force_destroy = var.force_destroy
 
   tags = merge({
     Name        = var.bucket_name
@@ -35,6 +40,63 @@ resource "aws_s3_bucket_policy" "policy" {
       }
     ]
   })
+}
+
+resource "aws_s3_bucket_policy" "alb_logs_policy" {
+  count      = var.enable_alb_access_logs_policy ? 1 : 0
+  bucket     = aws_s3_bucket.bucket.id
+  depends_on = [aws_s3_bucket_public_access_block.public_block]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main[0].arn
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.bucket.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.bucket.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "delivery.logs.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.bucket.arn
+      }
+    ]
+  })
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "lifecycle" {
+  count  = var.lifecycle_expiration_days != null ? 1 : 0
+  bucket = aws_s3_bucket.bucket.id
+
+  rule {
+    id     = "expire-objects"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      days = var.lifecycle_expiration_days
+    }
+  }
 }
 
 resource "aws_s3_bucket_cors_configuration" "cors" {

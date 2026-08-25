@@ -85,6 +85,24 @@ variable "cors_max_age_seconds" {
   description = "Max age seconds for CORS preflight cache"
 }
 
+variable "enable_alb_access_logs_policy" {
+  type        = bool
+  default     = false
+  description = "Whether to attach an S3 bucket policy allowing AWS ELB and log delivery service to write access logs"
+}
+
+variable "lifecycle_expiration_days" {
+  type        = number
+  default     = null
+  description = "Number of days after which objects in the bucket automatically expire"
+}
+
+variable "force_destroy" {
+  type        = bool
+  default     = false
+  description = "Whether all objects should be deleted from the bucket so that the bucket can be destroyed without error"
+}
+
 variable "tags" {
   type        = map(string)
   default     = {}
