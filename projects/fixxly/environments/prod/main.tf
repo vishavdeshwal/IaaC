@@ -1040,6 +1040,28 @@ resource "aws_lb_listener_rule" "serviceability_rule" {
   }
 }
 
+resource "aws_lb_listener_rule" "promise_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 71
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_serviceability.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/admin/promise*"]
+    }
+  }
+}
+
 resource "aws_lb_listener_rule" "order_rule" {
   listener_arn = module.alb.https_listener_arn
   priority     = 80
