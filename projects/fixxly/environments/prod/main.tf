@@ -765,7 +765,7 @@ resource "aws_lb_listener_rule" "frontend_rule" {
 
   condition {
     host_header {
-      values = ["fe.fixxly.in"]
+      values = ["fixxly.in", "www.fixxly.in"]
     }
   }
 }
@@ -2341,6 +2341,8 @@ locals {
       port             = var.product_service_port
       ecr_url          = module.ecr_product_service.repository_url
       target_group_arn = module.target_group_product.target_group_arn
+      min_capacity     = 3
+      max_capacity     = 10
     }
     "order-service" = {
       port             = var.order_service_port
@@ -2356,6 +2358,7 @@ locals {
       port             = var.inventory_service_port
       ecr_url          = module.ecr_inventory_service.repository_url
       target_group_arn = module.target_group_inventory.target_group_arn
+      min_capacity     = 2
     }
     "cms-bridge" = {
       port             = var.cms_bridge_port
@@ -2381,6 +2384,7 @@ locals {
       port             = var.erp_sync_service_port
       ecr_url          = module.ecr_erp_sync_service.repository_url
       target_group_arn = module.target_group_erp_sync.target_group_arn
+      min_capacity     = 2
     }
     "wallet-service" = {
       port             = var.wallet_service_port
@@ -2565,8 +2569,8 @@ module "ecs_backend_autoscaling" {
   name                  = each.key
   cluster_name          = module.ecs_cluster.cluster_name
   service_name          = module.ecs_backend_services[each.key].service_name
-  min_capacity          = 1
-  max_capacity          = 6
+  min_capacity          = lookup(each.value, "min_capacity", 1)
+  max_capacity          = lookup(each.value, "max_capacity", 6)
   enable_cpu_scaling    = true
   cpu_target_value      = 70.0
   enable_memory_scaling = true
@@ -2615,8 +2619,8 @@ module "ecs_saleor_api_autoscaling" {
   name               = "saleor-api"
   cluster_name       = module.ecs_cluster.cluster_name
   service_name       = module.ecs_saleor_api.service_name
-  min_capacity       = 1
-  max_capacity       = 6
+  min_capacity       = 5
+  max_capacity       = 20
   enable_cpu_scaling = true
   cpu_target_value   = 70.0
 
