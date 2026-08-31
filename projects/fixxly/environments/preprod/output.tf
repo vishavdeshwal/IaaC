@@ -131,6 +131,10 @@ output "ecr_serviceability_service_repository_url" {
   value = module.ecr_serviceability_service.repository_url
 }
 
+output "ecr_referral_service_repository_url" {
+  value = module.ecr_referral_service.repository_url
+}
+
 # --- Service Discovery Output ---
 
 output "service_discovery_namespace_name" {

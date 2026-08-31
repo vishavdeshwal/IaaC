@@ -244,3 +244,9 @@ variable "serviceability_service_port" {
   type    = number
   default = 3014
 }
+
+variable "referral_service_port" {
+  type    = number
+  default = 3015
+}
+

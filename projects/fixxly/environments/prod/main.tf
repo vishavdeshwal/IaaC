@@ -739,6 +739,21 @@ module "target_group_serviceability" {
   project               = var.project
 }
 
+module "target_group_referral" {
+  source                = "../../../../modules/aws/target_group"
+  name                  = "referral"
+  port                  = var.referral_service_port
+  protocol              = "HTTP"
+  target_type           = "ip"
+  vpc_id                = module.vpc.vpc_id
+  health_check_path     = "/healthz"
+  health_check_matcher  = "200,404"
+  health_check_timeout  = 30
+  health_check_interval = 45
+  environment           = var.environment
+  project               = var.project
+}
+
 module "alb" {
   source                 = "../../../../modules/aws/alb"
   name                   = "main"
@@ -904,6 +919,28 @@ resource "aws_lb_listener_rule" "saleor_webhook_erp_sync_rule" {
   condition {
     path_pattern {
       values = ["/api/v1/erp/webhooks/saleor*"]
+    }
+  }
+}
+
+resource "aws_lb_listener_rule" "referral_erp_webhook_rule" {
+  listener_arn = module.alb.https_listener_arn
+  priority     = 25
+
+  action {
+    type             = "forward"
+    target_group_arn = module.target_group_referral.target_group_arn
+  }
+
+  condition {
+    host_header {
+      values = ["api.fixxly.in"]
+    }
+  }
+
+  condition {
+    path_pattern {
+      values = ["/api/v1/referral/erp/webhooks/*", "/referral/erp/webhooks/*"]
     }
   }
 }
@@ -1335,6 +1372,13 @@ module "ecr_assets_service" {
 module "ecr_serviceability_service" {
   source      = "../../../../modules/aws/ecr"
   name        = "serviceability-service"
+  environment = var.environment
+  project     = var.project
+}
+
+module "ecr_referral_service" {
+  source      = "../../../../modules/aws/ecr"
+  name        = "referral-service"
   environment = var.environment
   project     = var.project
 }
@@ -2321,7 +2365,8 @@ locals {
       { name = "ERP_SYNC_BASE_URL", value = "http://erp-sync-service.${var.environment}.${var.project}.internal:3011" },
       { name = "WALLET_BASE_URL", value = "http://wallet-service.${var.environment}.${var.project}.internal:3012" },
       { name = "ASSETS_BASE_URL", value = "http://assets-service.${var.environment}.${var.project}.internal:3013" },
-      { name = "SERVICEABILITY_BASE_URL", value = "http://serviceability-service.${var.environment}.${var.project}.internal:3014" }
+      { name = "SERVICEABILITY_BASE_URL", value = "http://serviceability-service.${var.environment}.${var.project}.internal:3014" },
+      { name = "REFERRAL_BASE_URL", value = "http://referral-service.${var.environment}.${var.project}.internal:3015" }
     ],
     [for k, v in var.backend_env_vars : { name = k, value = v }]
   )
@@ -2400,6 +2445,11 @@ locals {
       port             = var.serviceability_service_port
       ecr_url          = module.ecr_serviceability_service.repository_url
       target_group_arn = module.target_group_serviceability.target_group_arn
+    }
+    "referral-service" = {
+      port             = var.referral_service_port
+      ecr_url          = module.ecr_referral_service.repository_url
+      target_group_arn = module.target_group_referral.target_group_arn
     }
   }
 }
