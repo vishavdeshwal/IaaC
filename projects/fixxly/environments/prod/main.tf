@@ -2376,6 +2376,8 @@ locals {
       port             = var.consumer_bff_port
       ecr_url          = module.ecr_consumer_bff.repository_url
       target_group_arn = module.target_group_bff.target_group_arn
+      min_capacity     = 5
+      max_capacity     = 20
     }
     "auth-service" = {
       port             = var.auth_service_port
@@ -2541,7 +2543,7 @@ module "rds_postgres" {
   identifier         = "saleor-strapi"
   engine             = "postgres"
   engine_version     = var.postgres_engine_version
-  instance_class     = "db.m5.large"
+  instance_class     = "db.m5.2xlarge"
   allocated_storage  = 100
   storage_type       = "gp3"
   db_name            = "fixxlypostgres"
@@ -2636,8 +2638,8 @@ module "ecs_frontend_autoscaling" {
   name                           = "frontend"
   cluster_name                   = module.ecs_cluster.cluster_name
   service_name                   = module.ecs_frontend.service_name
-  min_capacity                   = 2
-  max_capacity                   = 10
+  min_capacity                   = 5
+  max_capacity                   = 15
   enable_cpu_scaling             = true
   cpu_target_value               = 70.0
   alb_arn_suffix                 = module.alb.alb_arn_suffix
