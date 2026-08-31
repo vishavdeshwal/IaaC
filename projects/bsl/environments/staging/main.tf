@@ -1,15 +1,14 @@
 terraform {
   required_version = ">= 1.5.0"
 
-  # Note: Once projects/bsl/bootstrap is applied, configure the bootstrapped S3 bucket name below
-  # backend "s3" {
-  #   bucket       = "<bootstrapped-s3-bucket-name>"
-  #   key          = "bsl/staging/terraform.tfstate"
-  #   region       = "eu-west-1"
-  #   use_lockfile = true
-  #   encrypt      = true
-  #   profile      = "bsl"
-  # }
+  backend "s3" {
+    bucket       = "bsl-terraform-state-148552"
+    key          = "bsl/staging/terraform.tfstate"
+    region       = "eu-west-1"
+    use_lockfile = true
+    encrypt      = true
+    profile      = "bsl"
+  }
 
   required_providers {
     aws = {
@@ -34,6 +33,10 @@ provider "aws" {
 
 data "aws_availability_zones" "available" {
   state = "available"
+}
+
+data "aws_ssm_parameter" "ubuntu_ami" {
+  name = "/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id"
 }
 
 // =============================================================
@@ -104,4 +107,105 @@ module "route_tables" {
   private_subnet_ids = module.subnets.private_subnet_ids
   environment        = var.environment
   project            = var.project
+}
+
+// =============================================================
+// 2. Security Groups
+// =============================================================
+
+module "sg_app" {
+  source      = "../../../../modules/aws/security_groups"
+  name        = "app"
+  description = "Security group for Standalone Application EC2 Instance"
+  vpc_id      = module.vpc.vpc_id
+  environment = var.environment
+  project     = var.project
+
+  ingress_rules = [
+    {
+      from_port   = 80
+      to_port     = 80
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow HTTP traffic"
+    },
+    {
+      from_port   = 443
+      to_port     = 443
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow HTTPS traffic"
+    },
+    {
+      from_port   = 22
+      to_port     = 22
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow SSH access"
+    }
+  ]
+  egress_rules = [
+    {
+      from_port   = 0
+      to_port     = 0
+      protocol    = "-1"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow all outbound"
+    }
+  ]
+}
+
+// =============================================================
+// 3. IAM Role & Standalone Application EC2 Instance (t3.xlarge)
+// =============================================================
+
+module "iam_role_app" {
+  source = "../../../../modules/aws/iam_role"
+  name   = "${var.project}-${var.environment}-app-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+  policy_arns = ["arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"]
+  environment = var.environment
+  project     = var.project
+}
+
+resource "aws_iam_instance_profile" "app" {
+  name = "${var.project}-${var.environment}-app-profile"
+  role = module.iam_role_app.role_name
+}
+
+module "app_server" {
+  source               = "../../../../modules/aws/ec2"
+  name                 = "application"
+  ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
+  instance_type        = "t3.xlarge"
+  subnet_id            = values(module.subnets.public_subnet_ids)[0]
+  associate_public_ip  = true
+  root_volume_size     = 100
+  root_volume_type     = "gp3"
+  security_group_ids   = [module.sg_app.security_group_id]
+  iam_instance_profile = aws_iam_instance_profile.app.name
+  environment          = var.environment
+  project              = var.project
+}
+
+resource "aws_eip" "app" {
+  instance = module.app_server.instance_id
+  domain   = "vpc"
+
+  tags = {
+    Name        = "${var.environment}-${var.project}-app-eip"
+    Environment = var.environment
+    Project     = var.project
+  }
 }
