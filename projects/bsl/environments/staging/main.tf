@@ -156,7 +156,7 @@ module "sg_app" {
 }
 
 // =============================================================
-// 3. IAM Role & Standalone Application EC2 Instance (t3.xlarge)
+// 3. IAM Role & Standalone Application EC2 Instances (t3.xlarge)
 // =============================================================
 
 module "iam_role_app" {
@@ -184,6 +184,7 @@ resource "aws_iam_instance_profile" "app" {
   role = module.iam_role_app.role_name
 }
 
+// --- Application Server 1 ---
 module "app_server" {
   source               = "../../../../modules/aws/ec2"
   name                 = "application"
@@ -205,6 +206,33 @@ resource "aws_eip" "app" {
 
   tags = {
     Name        = "${var.environment}-${var.project}-app-eip"
+    Environment = var.environment
+    Project     = var.project
+  }
+}
+
+// --- ERP Server ---
+module "erp_server" {
+  source               = "../../../../modules/aws/ec2"
+  name                 = "application-2"
+  ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
+  instance_type        = "t3.xlarge"
+  subnet_id            = values(module.subnets.public_subnet_ids)[1]
+  associate_public_ip  = true
+  root_volume_size     = 100
+  root_volume_type     = "gp3"
+  security_group_ids   = [module.sg_app.security_group_id]
+  iam_instance_profile = aws_iam_instance_profile.app.name
+  environment          = var.environment
+  project              = var.project
+}
+
+resource "aws_eip" "erp" {
+  instance = module.app_server_2.instance_id
+  domain   = "vpc"
+
+  tags = {
+    Name        = "${var.environment}-${var.project}-erp-eip"
     Environment = var.environment
     Project     = var.project
   }

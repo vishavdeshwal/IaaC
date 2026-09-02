@@ -19,11 +19,21 @@ output "nat_gateway_ip" {
 }
 
 output "app_public_ip" {
-  description = "The public Elastic IP address of the Standalone Application EC2 Instance"
+  description = "The public Elastic IP address of the Standalone Application EC2 Instance 1"
   value       = aws_eip.app.public_ip
 }
 
 output "app_private_ip" {
-  description = "The private IP address of the Standalone Application EC2 Instance"
+  description = "The private IP address of the Standalone Application EC2 Instance 1"
   value       = module.app_server.private_ip
+}
+
+output "app_2_public_ip" {
+  description = "The public Elastic IP address of the Standalone Application EC2 Instance 2"
+  value       = aws_eip.app_2.public_ip
+}
+
+output "app_2_private_ip" {
+  description = "The private IP address of the Standalone Application EC2 Instance 2"
+  value       = module.app_server_2.private_ip
 }
