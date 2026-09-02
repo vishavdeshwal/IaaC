@@ -184,10 +184,10 @@ resource "aws_iam_instance_profile" "app" {
   role = module.iam_role_app.role_name
 }
 
-// --- Application Server 1 ---
+// --- 1. Application Server ---
 module "app_server" {
   source               = "../../../../modules/aws/ec2"
-  name                 = "application"
+  name                 = "app-server"
   ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
   instance_type        = "t3.xlarge"
   subnet_id            = values(module.subnets.public_subnet_ids)[0]
@@ -211,10 +211,10 @@ resource "aws_eip" "app" {
   }
 }
 
-// --- ERP Server ---
+// --- 2. ERP Server ---
 module "erp_server" {
   source               = "../../../../modules/aws/ec2"
-  name                 = "application-2"
+  name                 = "erp-server"
   ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
   instance_type        = "t3.xlarge"
   subnet_id            = values(module.subnets.public_subnet_ids)[1]
@@ -228,7 +228,7 @@ module "erp_server" {
 }
 
 resource "aws_eip" "erp" {
-  instance = module.app_server_2.instance_id
+  instance = module.erp_server.instance_id
   domain   = "vpc"
 
   tags = {
