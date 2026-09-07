@@ -131,6 +131,13 @@ module "sg_app" {
       description = "Allow HTTP traffic directly to Nginx"
     },
     {
+      from_port   = 3001
+      to_port     = 3001
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+      description = "Allow HTTP traffic directly to Nginx"
+    },
+    {
       from_port   = 443
       to_port     = 443
       protocol    = "tcp"

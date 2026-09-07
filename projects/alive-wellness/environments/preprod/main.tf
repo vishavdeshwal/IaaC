@@ -737,6 +737,7 @@ module "ecs_backend_worker" {
   launch_type        = "FARGATE"
   environment        = var.environment
   project            = var.project
+  health_check_grace_period_seconds = 300
 
   security_group_ids = [module.app_sg.security_group_id]
   subnet_ids = [

@@ -917,6 +917,7 @@ module "ecs_cluster" {
   cluster_name = "prod-app-cluster"
   environment  = var.environment
   project      = var.project
+  container_insights_value = "enhanced"
 }
 
 module "ecs_frontend" {
@@ -1049,6 +1050,7 @@ module "ecs_backend_worker" {
   launch_type        = "FARGATE"
   environment        = var.environment
   project            = var.project
+  health_check_grace_period_seconds = 300
 
   security_group_ids = [module.backend_sg.security_group_id]
   subnet_ids = [
