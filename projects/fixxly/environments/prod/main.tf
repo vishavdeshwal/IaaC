@@ -508,15 +508,15 @@ module "msk_sg" {
       from_port       = 9092
       to_port         = 9092
       protocol        = "tcp"
-      security_groups = [module.backend_sg.security_group_id]
-      description     = "Allow Plaintext Kafka port strictly from Backend Microservices SG"
+      security_groups = [module.backend_sg.security_group_id, module.bastion_sg.security_group_id]
+      description     = "Allow Plaintext Kafka port strictly from Backend and Bastion SG"
     },
     {
       from_port       = 9094
       to_port         = 9094
       protocol        = "tcp"
-      security_groups = [module.backend_sg.security_group_id]
-      description     = "Allow TLS Kafka port strictly from Backend Microservices SG"
+      security_groups = [module.backend_sg.security_group_id, module.bastion_sg.security_group_id]
+      description     = "Allow TLS Kafka port strictly from Backend and Bastion SG"
     }
   ]
 

@@ -776,10 +776,11 @@ module "rds_postgres" {
   identifier        = "postgres"
   engine            = "postgres"
   engine_version    = "15"
-  instance_class    = "db.r5.large"
+  instance_class    = "db.t3.large"
   allocated_storage = 200
   username          = var.master_db_user_name
   password          = var.master_db_user_pass
+  apply_immediately = true
   subnet_ids = [
     module.subnets.private_subnet_ids["db-1"],
     module.subnets.private_subnet_ids["db-2"]
@@ -811,7 +812,7 @@ module "rds_mariadb" {
   identifier           = "mariadb"
   engine               = "mariadb"
   engine_version       = "10.6"
-  instance_class       = "db.m5.xlarge"
+  instance_class       = "db.t3.xlarge"
   allocated_storage    = 100
   username             = var.mariadb_user_name
   password             = var.mariadb_user_pass

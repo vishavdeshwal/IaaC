@@ -737,7 +737,6 @@ module "ecs_backend_worker" {
   launch_type        = "FARGATE"
   environment        = var.environment
   project            = var.project
-  health_check_grace_period_seconds = 300
 
   security_group_ids = [module.app_sg.security_group_id]
   subnet_ids = [
@@ -870,6 +869,8 @@ module "target_group_backend_worker" {
   target_type       = "ip"
   vpc_id            = module.vpc.vpc_id
   health_check_path = "/health"
+  health_check_interval = 30
+  health_check_timeout = 20
   environment       = var.environment
   project           = var.project
 }
