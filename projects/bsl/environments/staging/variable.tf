@@ -39,3 +39,21 @@ variable "private_subnets" {
   type        = list(string)
   default     = ["10.1.10.0/24", "10.1.11.0/24"]
 }
+
+variable "media_bucket_name" {
+  description = "Name of the S3 bucket for media and assets"
+  type        = string
+  default     = "bsl-staging-media-assets-148552"
+}
+
+variable "cdn_aliases" {
+  description = "Custom domain aliases (CNAMEs) for the CloudFront CDN distribution"
+  type        = list(string)
+  default     = ["marketing-web.bubkasportslab.com"]
+}
+
+variable "cdn_acm_certificate_arn" {
+  description = "ACM Certificate ARN in us-east-1 for CloudFront (leave null to use default cloudfront certificate or override)"
+  type        = string
+  default     = null
+}

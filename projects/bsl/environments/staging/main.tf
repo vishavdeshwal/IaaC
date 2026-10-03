@@ -31,6 +31,8 @@ provider "aws" {
   }
 }
 
+data "aws_caller_identity" "current" {}
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -244,3 +246,57 @@ resource "aws_eip" "erp" {
     Project     = var.project
   }
 }
+
+// =============================================================
+// 4. S3 Media/Assets Bucket & CloudFront CDN with SSL (Marketing App)
+// =============================================================
+
+module "s3_media" {
+  source                     = "../../../../modules/aws/s3"
+  bucket_name                = var.media_bucket_name
+  environment                = var.environment
+  project                    = var.project
+  manage_public_access_block = true
+  block_public_acls          = true
+  block_public_policy        = true
+  ignore_public_acls         = true
+  restrict_public_buckets    = true
+  enable_cors                = true
+  cors_allowed_methods       = ["GET", "HEAD"]
+  cors_allowed_origins       = ["*"]
+  cors_allowed_headers       = ["*"]
+}
+
+module "cdn" {
+  source                         = "../../../../modules/aws/cloudfront"
+  s3_bucket_id                   = module.s3_media.bucket_id
+  s3_bucket_regional_domain_name = module.s3_media.bucket_regional_domain_name
+  aliases                        = ["marketing-web.bubkasportslab.com"]
+  acm_certificate_arn            = var.cdn_acm_certificate_arn != null ? var.cdn_acm_certificate_arn : "arn:aws:acm:us-east-1:${data.aws_caller_identity.current.account_id}:certificate/2a157789-2fa9-4d41-b7c9-55e08cfc3274"
+  environment                    = var.environment
+  project                        = var.project
+}
+
+resource "aws_s3_bucket_policy" "cdn_access" {
+  bucket = module.s3_media.bucket_id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowCloudFrontServicePrincipalReadOnly"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:GetObject"
+        Resource = "${module.s3_media.bucket_arn}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = module.cdn.cloudfront_distribution_arn
+          }
+        }
+      }
+    ]
+  })
+}
+// =========================

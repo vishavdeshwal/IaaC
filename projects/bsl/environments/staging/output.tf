@@ -37,3 +37,23 @@ output "erp_server_private_ip" {
   description = "The private IP address of the Standalone ERP Server"
   value       = module.erp_server.private_ip
 }
+
+output "s3_media_bucket_name" {
+  description = "Name of the S3 media bucket"
+  value       = module.s3_media.bucket_id
+}
+
+output "cloudfront_domain_name" {
+  description = "The domain name of the CloudFront CDN distribution"
+  value       = module.cdn.cloudfront_domain_name
+}
+
+output "cloudfront_distribution_id" {
+  description = "The ID of the CloudFront CDN distribution"
+  value       = module.cdn.cloudfront_distribution_id
+}
+
+output "cloudfront_distribution_arn" {
+  description = "The ARN of the CloudFront CDN distribution"
+  value       = module.cdn.cloudfront_distribution_arn
+}

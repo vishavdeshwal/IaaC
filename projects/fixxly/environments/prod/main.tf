@@ -1,17 +1,18 @@
 terraform {
   required_version = ">= 1.5.0"
-  backend "s3" {
-    bucket  = "fixxly-terraform-state-539109"
-    key     = "fixxly/prod/terraform.tfstate"
-    region  = "ap-south-1"
-    encrypt = true
-    profile = "fixxly"
-  }
   required_providers {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+  }
+    backend "s3" {
+    bucket  = "fixxly-terraform-state-539109"
+    key     = "fixxly/prod/terraform.tfstate"
+    region  = "ap-south-1"
+    encrypt = true
+    profile = "fixxly"
+    use_lockfile = true
   }
 }
 
@@ -2694,5 +2695,3 @@ module "ecs_saleor_worker_autoscaling" {
   environment = var.environment
   project     = var.project
 }
-
-

@@ -778,6 +778,7 @@ module "rds_postgres" {
   engine_version    = "15"
   instance_class    = "db.t3.large"
   allocated_storage = 200
+  storage_type      = "gp3"
   username          = var.master_db_user_name
   password          = var.master_db_user_pass
   apply_immediately = true
@@ -812,8 +813,9 @@ module "rds_mariadb" {
   identifier           = "mariadb"
   engine               = "mariadb"
   engine_version       = "10.6"
-  instance_class       = "db.t3.xlarge"
+  instance_class       = "db.t3.large"
   allocated_storage    = 100
+  storage_type         = "gp3"
   username             = var.mariadb_user_name
   password             = var.mariadb_user_pass
   apply_immediately    = true
@@ -887,7 +889,7 @@ module "bastion_eip" {
 module "strapi_server" {
   source               = "../../../../modules/aws/ec2"
   name                 = "strapi-server"
-  instance_type        = "t3.medium"
+  instance_type        = "t3.small"
   ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
   subnet_id            = module.subnets.private_subnet_ids["app-1"]
   security_group_ids   = [module.strapi_sg.security_group_id]
@@ -902,7 +904,7 @@ module "strapi_server" {
 module "erp_server" {
   source               = "../../../../modules/aws/ec2"
   name                 = "erp-server"
-  instance_type        = "t3.xlarge"
+  instance_type        = "t3.large"
   ami_id               = data.aws_ssm_parameter.ubuntu_ami.value
   subnet_id            = module.subnets.private_subnet_ids["app-2"]
   security_group_ids   = [module.erp_sg.security_group_id]
