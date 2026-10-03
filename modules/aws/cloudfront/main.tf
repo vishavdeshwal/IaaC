@@ -16,7 +16,9 @@ resource "aws_cloudfront_distribution" "this" {
   enabled             = true
   is_ipv6_enabled     = true
   comment             = "CloudFront distribution for S3 bucket ${var.s3_bucket_id} in ${var.environment}"
-  default_root_object = ""
+  default_root_object = var.default_root_object
+
+  aliases = var.aliases
 
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD", "OPTIONS"]
@@ -39,7 +41,7 @@ resource "aws_cloudfront_distribution" "this" {
     compress               = true
   }
 
-  price_class = "PriceClass_100" # Use PriceClass_100 (North America, Europe, Israel) to minimize costs for staging
+  price_class = var.price_class
 
   restrictions {
     geo_restriction {
@@ -48,7 +50,10 @@ resource "aws_cloudfront_distribution" "this" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    cloudfront_default_certificate = var.acm_certificate_arn == null ? true : false
+    acm_certificate_arn            = var.acm_certificate_arn
+    ssl_support_method             = var.acm_certificate_arn != null ? var.ssl_support_method : null
+    minimum_protocol_version       = var.acm_certificate_arn != null ? var.minimum_protocol_version : null
   }
 
   tags = {

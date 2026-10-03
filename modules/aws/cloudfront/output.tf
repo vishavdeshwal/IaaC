@@ -12,3 +12,8 @@ output "cloudfront_distribution_id" {
   value       = aws_cloudfront_distribution.this.id
   description = "The ID of the CloudFront distribution"
 }
+
+output "cloudfront_hosted_zone_id" {
+  value       = aws_cloudfront_distribution.this.hosted_zone_id
+  description = "The CloudFront Route 53 Zone ID"
+}
