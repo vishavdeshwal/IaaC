@@ -42,6 +42,7 @@ resource "aws_elasticache_replication_group" "redis" {
   snapshot_window            = var.snapshot_window
   apply_immediately          = var.apply_immediately
   automatic_failover_enabled = var.automatic_failover_enabled || var.cluster_mode_enabled
+  parameter_group_name       = var.parameter_group_name
 
   # Cluster mode configuration (standard Redis vs sharded Cluster Mode)
   num_cache_clusters      = var.cluster_mode_enabled ? null : var.num_cache_clusters

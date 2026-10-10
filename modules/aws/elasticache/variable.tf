@@ -142,3 +142,9 @@ variable "subnet_group_name_override" {
   default = null
 }
 
+variable "parameter_group_name" {
+  type        = string
+  default     = null
+  description = "Name of the parameter group to associate with this cluster"
+}
+

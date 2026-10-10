@@ -28,11 +28,6 @@ variable "domain_name" {
   default     = "bubkasportslab.com"
 }
 
-variable "manage_route53_records" {
-  type        = bool
-  description = "Whether to create and manage Route 53 DNS records for bubkasportslab.com"
-  default     = true
-}
 
 // -------------------------------------------------------------
 // Networking Variables
@@ -145,7 +140,7 @@ variable "media_bucket_name" {
 variable "mariadb_engine_version" {
   type        = string
   description = "MariaDB engine version for ERP database"
-  default     = "11.4.5"
+  default     = "11.4.13"
 }
 
 variable "mariadb_instance_class" {
@@ -160,15 +155,9 @@ variable "master_db_user_name" {
   default     = "admin"
 }
 
-variable "master_db_user_pass" {
-  type        = string
-  description = "Master password for ERP MariaDB database"
-  sensitive   = true
-}
-
 variable "postgres_engine_version" {
   type        = string
-  description = "PostgreSQL engine version for Saleor/Strapi and Backend databases"
+  description = "PostgreSQL engine version for Strapi and Backend databases"
   default     = "15.17"
 }
 
@@ -180,26 +169,14 @@ variable "postgres_instance_class" {
 
 variable "postgres_master_user_name" {
   type        = string
-  description = "Master username for Saleor/Strapi PostgreSQL database"
+  description = "Master username for Strapi PostgreSQL database"
   default     = "postgres"
-}
-
-variable "postgres_master_user_pass" {
-  type        = string
-  description = "Master password for Saleor/Strapi PostgreSQL database"
-  sensitive   = true
 }
 
 variable "backend_postgres_master_user_name" {
   type        = string
   description = "Master username for Backend PostgreSQL database"
   default     = "postgres"
-}
-
-variable "backend_postgres_master_user_pass" {
-  type        = string
-  description = "Master password for Backend PostgreSQL database"
-  sensitive   = true
 }
 
 // -------------------------------------------------------------
@@ -232,19 +209,6 @@ variable "backend_secrets" {
 variable "backend_env_vars" {
   type        = map(string)
   description = "Backend non-sensitive environment variables injected directly into Task Definition"
-  default     = {}
-}
-
-variable "saleor_secrets" {
-  type        = map(string)
-  description = "Saleor sensitive secrets stored in AWS Secrets Manager"
-  default     = {}
-  sensitive   = true
-}
-
-variable "saleor_env_vars" {
-  type        = map(string)
-  description = "Saleor non-sensitive environment variables injected directly into Task Definition"
   default     = {}
 }
 

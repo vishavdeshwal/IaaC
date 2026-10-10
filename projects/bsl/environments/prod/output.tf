@@ -51,11 +51,11 @@ output "ecs_cluster_name" {
 output "ecr_repositories" {
   description = "ECR Repository URLs"
   value = {
-    frontend         = module.ecr_frontend.repository_url
-    backend          = module.ecr_backend.repository_url
-    saleor_api       = module.ecr_saleor_api.repository_url
-    saleor_dashboard = module.ecr_saleor_dashboard.repository_url
-    strapi           = module.ecr_strapi.repository_url
+    website = module.ecr_website.repository_url
+    app     = module.ecr_app.repository_url
+    admin   = module.ecr_admin.repository_url
+    backend = module.ecr_backend.repository_url
+    strapi  = module.ecr_strapi.repository_url
   }
 }
 
@@ -63,7 +63,6 @@ output "secrets_manager_arns" {
   description = "ARNs of AWS Secrets Manager secrets"
   value = {
     backend = module.backend_secrets.secret_arn
-    saleor  = module.saleor_secrets.secret_arn
     strapi  = module.strapi_secrets.secret_arn
   }
 }
@@ -73,8 +72,8 @@ output "rds_mariadb_endpoint" {
   value       = module.rds_mariadb.endpoint
 }
 
-output "rds_postgres_saleor_strapi_endpoint" {
-  description = "Endpoint of Saleor & Strapi PostgreSQL RDS Instance"
+output "rds_postgres_strapi_endpoint" {
+  description = "Endpoint of Strapi PostgreSQL RDS Instance"
   value       = module.rds_postgres.endpoint
 }
 
@@ -108,6 +107,11 @@ output "cloudfront_distribution_id" {
   value       = module.cdn.cloudfront_distribution_id
 }
 
+output "cloudfront_hosted_zone_id" {
+  description = "CloudFront Route 53 Zone ID for DNS Alias setup"
+  value       = module.cdn.cloudfront_hosted_zone_id
+}
+
 output "sqs_media_queue_url" {
   description = "URL of SQS Media Events queue"
   value       = module.sqs_media_events.queue_url
@@ -116,4 +120,9 @@ output "sqs_media_queue_url" {
 output "guardduty_detector_id" {
   description = "GuardDuty Detector ID"
   value       = aws_guardduty_detector.primary.id
+}
+
+output "service_discovery_namespace_name" {
+  description = "Name of the Cloud Map private DNS namespace"
+  value       = aws_service_discovery_private_dns_namespace.internal.name
 }
