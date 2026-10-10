@@ -723,14 +723,20 @@ resource "aws_lb_listener_rule" "website" {
   priority     = 10
 
   action {
-    type             = "forward"
-    target_group_arn = module.target_group_website.target_group_arn
+    type = "redirect"
+
+    redirect {
+      host        = "app.${var.domain_name}"
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
   }
 
   condition {
     host_header {
       values = [
-        "fe.bubkasportslab.com"
+        "fe.${var.domain_name}"
       ]
     }
   }
@@ -743,7 +749,7 @@ resource "aws_lb_listener_rule" "app" {
 
   action {
     type             = "forward"
-    target_group_arn = module.target_group_app.target_group_arn
+    target_group_arn = module.target_group_website.target_group_arn
   }
 
   condition {
